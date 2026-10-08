@@ -37,19 +37,23 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1)
+### Implemented (Day 1 & Day 2)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
-- ✅ Repository URL input interface
-- ✅ API versioning (v1)
-- ✅ Environment configuration management
-- ✅ Automated backend tests
+- ✅ GitHub repository URL validation (HTTPS enforcement, format checks)
+- ✅ Safe shallow cloning into temporary workspace with automatic cleanup
+- ✅ Repository scanner with ignored directories (.git, node_modules, venv, etc.)
+- ✅ Programming language detection across 20+ languages
+- ✅ Repository statistics (file count, directory count, total size, largest files)
+- ✅ Hierarchical file tree generation
+- ✅ Interactive frontend analysis results dashboard
+- ✅ API versioning (v1) and Pydantic schemas
+- ✅ Automated test suite (21 unit and integration tests)
 - ✅ Project documentation & architecture document
 
 ### Planned
 
-- 🔄 Repository ingestion via GitHub API
 - 🧠 Code parsing with Tree-sitter
 - 📊 AI-powered code analysis
 - 🔍 RAG-based codebase Q&A
@@ -151,6 +155,26 @@ npm run dev
 
 Frontend runs at: http://localhost:3000
 
+## 📦 Repository Ingestion
+
+RepoPilot AI accepts public GitHub repository URLs and processes them through an isolated, secure pipeline:
+
+1. **URL Validation & Security Enforcement**:
+   - Strictly enforces `https://github.com/owner/repository` formats.
+   - Rejects non-HTTPS schemes, private credentials, and command injection characters.
+2. **Safe Shallow Cloning**:
+   - Clones with `--depth=1 --single-branch` into an ephemeral workspace directory.
+   - Prevents path traversal outside the designated workspace.
+   - Automatic cleanup using a Python context manager immediately after analysis.
+3. **Smart Codebase Scanning**:
+   - Recursively traverses repository while strictly skipping dependencies and metadata (`.git`, `node_modules`, `venv`, `__pycache__`, `.next`, `dist`, etc.).
+   - Ignores binary files, media assets, compressed archives, and source maps.
+4. **Language & Statistics Extraction**:
+   - Maps file extensions and special filenames (e.g. `Dockerfile`, `Makefile`) to recognized languages.
+   - Computes total files, directory counts, cumulative size, and identifies the largest files.
+5. **Hierarchical File Tree Generation**:
+   - Constructs a navigable file tree structure for intuitive frontend visualization.
+
 ## 🔌 API
 
 ### Health Check
@@ -166,7 +190,59 @@ Response:
   "status": "healthy",
   "service": "RepoPilot AI",
   "version": "0.1.0",
-  "timestamp": "2025-10-05T09:00:00.000000+00:00"
+  "timestamp": "2026-10-08T09:00:00.000000+00:00"
+}
+```
+
+### Analyze Repository
+
+```bash
+POST /api/v1/repositories/analyze
+```
+
+Request payload:
+
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World"
+}
+```
+
+Response:
+
+```json
+{
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "master"
+  },
+  "statistics": {
+    "total_files": 1,
+    "total_directories": 0,
+    "total_size_bytes": 13,
+    "file_extensions": {
+      "(no extension)": 1
+    },
+    "largest_files": [
+      {
+        "path": "README",
+        "size_bytes": 13
+      }
+    ]
+  },
+  "languages": {},
+  "file_tree": [
+    {
+      "name": "README",
+      "type": "file",
+      "path": "README",
+      "size_bytes": 13,
+      "children": null
+    }
+  ],
+  "status": "success"
 }
 ```
 
@@ -185,7 +261,7 @@ pytest tests/ -v
 | Phase | Description | Status |
 |-------|-------------|--------|
 | **Phase 1** | Foundation — Project setup, FastAPI, Next.js | ✅ Complete |
-| **Phase 2** | Repository Ingestion — GitHub API, clone, file parsing | 🔲 Planned |
+| **Phase 2** | Repository Ingestion — URL validation, safe clone, scan & metrics | ✅ Complete |
 | **Phase 3** | Code Intelligence — Tree-sitter parsing, AST analysis | 🔲 Planned |
 | **Phase 4** | RAG Pipeline — Embeddings, pgvector, semantic search | 🔲 Planned |
 | **Phase 5** | Agentic Workflow — LangGraph, agent orchestration | 🔲 Planned |

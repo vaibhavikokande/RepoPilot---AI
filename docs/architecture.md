@@ -38,9 +38,9 @@ This document describes the high-level architecture of RepoPilot AI. Components 
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │  Repository  │  │     Code     │  │    Agent     │
 │  Ingestion   │  │  Knowledge   │  │ Orchestrator │
-│  [Planned]   │  │   [Planned]  │  │  [Planned]   │
+│[Implemented] │  │   [Planned]  │  │  [Planned]   │
 │              │  │              │  │              │
-│ • GitHub API │  │ • Tree-sitter│  │ • LangGraph  │
+│ • URL checks │  │ • Tree-sitter│  │ • LangGraph  │
 │ • Clone repos│  │ • Embeddings │  │ • Multi-agent│
 │ • File tree  │  │ • pgvector   │  │ • Workflows  │
 └──────────────┘  └──────────────┘  └──────┬───────┘
@@ -82,16 +82,39 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - Pydantic settings management
   - Dependency injection ready
 
-### Repository Ingestion Service [Planned]
+### Repository Ingestion Service [Implemented]
 
-- **Purpose**: Clone and process GitHub repositories
-- **Tech**: GitHub API, git operations
+The foundation for future code understanding and RAG pipelines:
+
+```
+User
+ ↓
+Next.js Frontend
+ ↓
+FastAPI Backend
+ ↓
+Repository Ingestion Service
+ ↓
+GitHub Repository
+ ↓
+Repository Scanner
+ ↓
+Repository Metadata & File Tree
+```
+
+- **Purpose**: Validate, shallow-clone, scan, and extract metrics from public repositories
+- **Tech**: GitPython, Python pathlib/os, Pydantic v2
+- **Components**:
+  - `GitHubService`: Strict HTTPS URL validation, owner/repo validation, injection rejection
+  - `RepositoryService`: Shallow cloning (`--depth=1 --single-branch`) into ephemeral workspaces with auto-cleanup context manager
+  - `ScannerService`: Directory filtering, binary filtering, multi-language detection, metric aggregation, and file tree builder
 - **Responsibilities**:
-  - Validate GitHub repository URLs
-  - Clone repositories to temporary storage
-  - Extract file trees and metadata
-  - Detect programming languages
-  - Track repository statistics
+  - Validate GitHub repository HTTPS URLs
+  - Clone repositories safely to isolated workspace directories
+  - Extract structured file trees and metadata
+  - Detect 20+ programming languages
+  - Compute file counts, directory counts, size metrics, and largest files
+  - Immediate workspace cleanup preventing disk retention
 
 ### Code Parser [Planned]
 
@@ -161,11 +184,18 @@ This document describes the high-level architecture of RepoPilot AI. Components 
 - **Documented**: Auto-generated OpenAPI/Swagger documentation at `/docs`
 - **Async**: Async endpoints for non-blocking I/O operations
 
-## Security Considerations (Planned)
+## Security Considerations
 
-- API key authentication for backend services
-- Rate limiting on all endpoints
-- Input sanitization for repository URLs
-- Sandboxed code execution environment
-- No storage of user credentials
-- Environment-based secret management (never committed to Git)
+### Implemented Safeguards
+- **HTTPS Only**: Only secure `https://github.com/` URLs permitted; credentials in URLs rejected.
+- **Strict Input Validation**: Regex-enforced repository paths prevent command injection and malformed requests.
+- **Zero Code Execution**: Repository code is strictly scanned as static text; no packages, scripts, or executables are run.
+- **Path Traversal Prevention**: Target directories are resolved and verified against the designated workspace boundary.
+- **Ephemeral Workspaces**: Repositories are cloned to isolated directories and removed immediately upon analysis completion.
+- **Git Protection**: Cloned files, dependencies, and environment files are excluded via `.gitignore`.
+
+### Planned Safeguards
+- API key authentication and rate limiting for backend services
+- Sandboxed code execution environment (for future test execution phases)
+- Enterprise repository access tokens and secrets vault
+- File size and clone depth quotas in production deployment

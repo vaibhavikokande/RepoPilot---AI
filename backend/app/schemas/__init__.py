@@ -1,4 +1,4 @@
-"""Pydantic and database models for RepoPilot AI."""
+"""Pydantic request and response schemas for RepoPilot AI."""
 
 from app.schemas.repository import (
     FileInfo,

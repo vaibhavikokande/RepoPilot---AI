@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # CORS
     allowed_origins: list[str] = ["http://localhost:3000"]
 
+    # Workspace & Repository Ingestion
+    workspace_dir: str = "workspace"
+    max_repo_size_mb: int = 100
+    clone_timeout_seconds: int = 60
+    max_file_tree_depth: int = 4
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
