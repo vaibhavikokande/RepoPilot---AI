@@ -3,7 +3,12 @@
 import logging
 from fastapi import APIRouter, HTTPException, status
 
+from app.code_intelligence import CodeIntelligenceAnalyzer
 from app.core.config import get_settings
+from app.schemas.code_analysis import (
+    CodeAnalysisRequest,
+    CodeAnalysisResponse,
+)
 from app.schemas.repository import (
     RepositoryAnalyzeRequest,
     RepositoryAnalyzeResponse,
@@ -116,3 +121,99 @@ async def analyze_repository(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while analyzing the repository.",
         ) from exc
+
+
+@router.post(
+    "/analyze-code",
+    response_model=CodeAnalysisResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Perform static code intelligence analysis on a repository",
+    description=(
+        "Clones the repository into an ephemeral workspace, statically parses supported "
+        "source files (Python, JavaScript, TypeScript) using language ASTs, extracts classes, "
+        "functions, methods, imports, dependencies, and builds a hierarchical codebase map."
+    ),
+)
+async def analyze_repository_code(
+    request: CodeAnalysisRequest,
+) -> CodeAnalysisResponse:
+    """Analyze source code structure and extract entities from a public repository.
+
+    Args:
+        request: Request containing the public repository URL.
+
+    Returns:
+        CodeAnalysisResponse with entities, dependencies, codebase map, and summary metrics.
+    """
+    # 1. Validate and parse the GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Clone and analyze code inside safe workspace
+    repo_service = RepositoryService()
+    analyzer = CodeIntelligenceAnalyzer()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            (
+                summary,
+                files,
+                entities,
+                dependencies,
+                codebase_tree,
+                errors,
+            ) = analyzer.analyze_repository(repo_path)
+
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return CodeAnalysisResponse(
+                repository=repo_info,
+                summary=summary,
+                files=files,
+                entities=entities,
+                dependencies=dependencies,
+                codebase_tree=codebase_tree,
+                errors=errors,
+                status="success",
+            )
+
+    except RepositoryAccessError as exc:
+        logger.warning(
+            "Repository access failed for %s: %s", parsed_repo.url, exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    except RepositoryCloningError as exc:
+        logger.error(
+            "Repository cloning failed for %s: %s", parsed_repo.url, exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        logger.exception("Unexpected error while analyzing repository code: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while analyzing the repository code.",
+        ) from exc
+

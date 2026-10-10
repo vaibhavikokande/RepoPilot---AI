@@ -5,6 +5,7 @@ import os
 import shutil
 import stat
 import tempfile
+import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -171,28 +172,39 @@ class RepositoryService:
         if not target_dir.exists():
             return
 
-        for root, dirs, files in os.walk(target_dir, topdown=False):
-            for file_name in files:
-                file_path = os.path.join(root, file_name)
-                try:
-                    os.chmod(file_path, stat.S_IWRITE | stat.S_IWUSR)
-                    os.unlink(file_path)
-                except Exception:
-                    pass
-
-            for dir_name in dirs:
-                dir_path = os.path.join(root, dir_name)
-                try:
-                    os.chmod(dir_path, stat.S_IWRITE | stat.S_IWUSR | stat.S_IXUSR)
-                    os.rmdir(dir_path)
-                except Exception:
-                    pass
-
-        try:
-            os.rmdir(target_dir)
-            logger.debug("Cleaned up workspace at %s", target_dir)
-        except Exception:
+        def _on_error(func, path, _exc_info):
             try:
-                shutil.rmtree(target_dir, ignore_errors=True)
-            except Exception as exc:
-                logger.warning("Failed to clean up %s: %s", target_dir, exc)
+                os.chmod(path, stat.S_IWRITE | stat.S_IWUSR)
+                func(path)
+            except Exception:
+                pass
+
+        for attempt in range(4):
+            try:
+                # Make all files and folders writable first
+                for root, dirs, files in os.walk(target_dir, topdown=False):
+                    for file_name in files:
+                        p = os.path.join(root, file_name)
+                        try:
+                            os.chmod(p, stat.S_IWRITE | stat.S_IWUSR)
+                            os.unlink(p)
+                        except Exception:
+                            pass
+                    for dir_name in dirs:
+                        p = os.path.join(root, dir_name)
+                        try:
+                            os.chmod(p, stat.S_IWRITE | stat.S_IWUSR | stat.S_IXUSR)
+                            os.rmdir(p)
+                        except Exception:
+                            pass
+
+                shutil.rmtree(target_dir, onerror=_on_error)
+            except Exception:
+                pass
+
+            if not target_dir.exists():
+                logger.debug("Cleaned up workspace at %s", target_dir)
+                return
+            time.sleep(0.05)
+
+        logger.warning("Target directory %s could not be completely removed", target_dir)

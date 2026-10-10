@@ -1,5 +1,9 @@
 """Pydantic request and response schemas for RepoPilot AI."""
 
+from app.schemas.code_analysis import (
+    CodeAnalysisRequest,
+    CodeAnalysisResponse,
+)
 from app.schemas.repository import (
     FileInfo,
     FileTreeNode,
@@ -10,6 +14,8 @@ from app.schemas.repository import (
 )
 
 __all__ = [
+    "CodeAnalysisRequest",
+    "CodeAnalysisResponse",
     "FileInfo",
     "FileTreeNode",
     "RepositoryAnalyzeRequest",
@@ -17,3 +23,4 @@ __all__ = [
     "RepositoryInfo",
     "RepositoryStatistics",
 ]
+

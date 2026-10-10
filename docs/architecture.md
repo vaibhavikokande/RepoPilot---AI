@@ -37,12 +37,12 @@ This document describes the high-level architecture of RepoPilot AI. Components 
           ▼                ▼                ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │  Repository  │  │     Code     │  │    Agent     │
-│  Ingestion   │  │  Knowledge   │  │ Orchestrator │
-│[Implemented] │  │   [Planned]  │  │  [Planned]   │
+│  Ingestion   │  │ Intelligence │  │ Orchestrator │
+│[Implemented] │  │[Implemented] │  │  [Planned]   │
 │              │  │              │  │              │
-│ • URL checks │  │ • Tree-sitter│  │ • LangGraph  │
-│ • Clone repos│  │ • Embeddings │  │ • Multi-agent│
-│ • File tree  │  │ • pgvector   │  │ • Workflows  │
+│ • URL checks │  │ • Python AST │  │ • LangGraph  │
+│ • Clone repos│  │ • Tree-sitter│  │ • Multi-agent│
+│ • File tree  │  │ • Code map   │  │ • Workflows  │
 └──────────────┘  └──────────────┘  └──────┬───────┘
                                            │
                               ┌────────────┼────────────┐
@@ -116,11 +116,39 @@ Repository Metadata & File Tree
   - Compute file counts, directory counts, size metrics, and largest files
   - Immediate workspace cleanup preventing disk retention
 
-### Code Parser [Planned]
+### Code Intelligence Engine [Implemented]
 
-- **Purpose**: Parse source code into structured representations
-- **Tech**: Tree-sitter
-- **Output**: AST nodes, function signatures, class hierarchies, import graphs
+The AST-based parsing and structural comprehension layer:
+
+```
+User
+ ↓
+Next.js Frontend
+ ↓
+FastAPI Backend
+ ↓
+Repository Ingestion
+ ↓
+Repository Scanner
+ ↓
+Code Intelligence Engine
+ ├── Language Detection
+ ├── AST Parser (Python AST, Tree-sitter JS/TS/TSX)
+ ├── Entity Extraction (Classes, Methods, Functions, Signatures, Line Info)
+ ├── Dependency Analysis (Intra-repo vs External Imports)
+ └── Codebase Map (Directory → File → Class → Methods / Functions)
+ ↓
+Future RAG Layer [Planned]
+```
+
+- **Purpose**: Parse source code into rich structural representations without code execution
+- **Tech**: Python `ast`, `tree-sitter`, `tree-sitter-javascript`, `tree-sitter-typescript`
+- **Components**:
+  - `PythonParser`: Standard library AST parser extracting classes, methods, top-level functions, decorators, type hints, docstrings, imports, and variables.
+  - `JavaScriptTypeScriptParser`: Tree-sitter grammar parser extracting classes, methods, functions, arrow functions, interfaces, type aliases, and imports.
+  - `CodebaseTreeBuilder`: Builds a hierarchical structural map connecting files to their internal entities.
+  - `CodeIntelligenceAnalyzer`: Orchestrates multi-file parsing, maps intra-repo dependencies, computes quantitative summaries, and isolates syntax errors.
+- **Output**: Structured entities with 1-indexed `start_line` / `end_line` ranges, dependency maps, and codebase trees.
 
 ### Code Knowledge Layer [Planned]
 

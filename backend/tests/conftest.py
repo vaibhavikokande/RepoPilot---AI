@@ -26,17 +26,61 @@ def sample_repo_path() -> Generator[Path, None, None]:
         # Create standard directories and files
         app_dir = temp_dir / "app"
         app_dir.mkdir(parents=True, exist_ok=True)
-        (app_dir / "main.py").write_text("print('hello')", encoding="utf-8")
-        (app_dir / "services.py").write_text("# service logic", encoding="utf-8")
+        (app_dir / "main.py").write_text(
+            '"""Main application entry point."""\n'
+            "import os\n"
+            "from app.services import UserService\n\n"
+            'APP_NAME = "SampleApp"\n\n'
+            "def create_app() -> str:\n"
+            '    """Create application instance."""\n'
+            "    service = UserService()\n"
+            "    return service.get_status()\n",
+            encoding="utf-8",
+        )
+        (app_dir / "services.py").write_text(
+            '"""Service layer."""\n'
+            "from typing import Optional\n\n"
+            "class UserService:\n"
+            '    """Manages user operations."""\n'
+            "    def __init__(self, db_url: Optional[str] = None):\n"
+            "        self.db_url = db_url\n\n"
+            "    def get_status(self) -> str:\n"
+            '        """Return service status."""\n'
+            '        return "ready"\n\n'
+            "    def create_user(self, name: str) -> dict:\n"
+            '        return {"name": name}\n',
+            encoding="utf-8",
+        )
 
         frontend_dir = temp_dir / "frontend"
         frontend_dir.mkdir(parents=True, exist_ok=True)
-        (frontend_dir / "index.ts").write_text("console.log('hi');", encoding="utf-8")
+        (frontend_dir / "index.ts").write_text(
+            "import { config } from './config';\n\n"
+            "export interface UserProfile {\n"
+            "  id: number;\n"
+            "  name: string;\n"
+            "}\n\n"
+            "export class UserClient {\n"
+            "  getUser(): UserProfile {\n"
+            "    return { id: 1, name: 'Alice' };\n"
+            "  }\n"
+            "}\n\n"
+            "export function render(): void {\n"
+            "  console.log('Rendering');\n"
+            "}\n",
+            encoding="utf-8",
+        )
         (frontend_dir / "style.css").write_text("body { color: red; }", encoding="utf-8")
 
         tests_dir = temp_dir / "tests"
         tests_dir.mkdir(parents=True, exist_ok=True)
-        (tests_dir / "test_main.py").write_text("def test_it(): pass", encoding="utf-8")
+        (tests_dir / "test_main.py").write_text(
+            "import pytest\n"
+            "from app.main import create_app\n\n"
+            "def test_create_app():\n"
+            '    assert create_app() == "ready"\n',
+            encoding="utf-8",
+        )
 
         (temp_dir / "README.md").write_text("# Test Project", encoding="utf-8")
         (temp_dir / "Dockerfile").write_text("FROM python:3.11", encoding="utf-8")

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { FileTreeNode, RepositoryAnalyzeResponse } from "@/lib/api";
+import {
+  analyzeCodeIntelligence,
+  CodeAnalysisResponse,
+  FileTreeNode,
+  RepositoryAnalyzeResponse,
+} from "@/lib/api";
+import CodeIntelligenceView from "./CodeIntelligenceView";
 
 interface RepoResultsProps {
   data: RepositoryAnalyzeResponse;
@@ -67,6 +73,24 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
   const { repository, statistics, languages, file_tree } = data;
   const totalLangFiles = Object.values(languages).reduce((a, b) => a + b, 0);
 
+  const [codeData, setCodeData] = useState<CodeAnalysisResponse | null>(null);
+  const [isCodeLoading, setIsCodeLoading] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  const handleRunCodeIntelligence = async () => {
+    setIsCodeLoading(true);
+    setCodeError(null);
+    try {
+      const response = await analyzeCodeIntelligence(repository.url);
+      setCodeData(response);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to analyze code intelligence.";
+      setCodeError(msg);
+    } finally {
+      setIsCodeLoading(false);
+    }
+  };
+
   return (
     <div className="mt-8 bg-card border border-border rounded-xl p-6 sm:p-8 animate-fade-in shadow-xl">
       {/* Header */}
@@ -108,14 +132,39 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
           </a>
         </div>
 
-        {onReset && (
-          <button
-            onClick={onReset}
-            className="self-start sm:self-auto text-xs px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-card-hover text-muted hover:text-foreground transition-colors"
-          >
-            Analyze Another
-          </button>
-        )}
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {!codeData && (
+            <button
+              onClick={handleRunCodeIntelligence}
+              disabled={isCodeLoading}
+              className="text-xs px-3.5 py-1.5 rounded-lg border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary-hover font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
+            >
+              {isCodeLoading ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Parsing AST...</span>
+                </>
+              ) : (
+                <>
+                  <span>🧠</span>
+                  <span>Extract Code Intelligence</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {onReset && (
+            <button
+              onClick={onReset}
+              className="text-xs px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-card-hover text-muted hover:text-foreground transition-colors cursor-pointer"
+            >
+              Analyze Another
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Metrics Grid */}
@@ -208,6 +257,20 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
           </div>
         </div>
       </div>
+
+      {/* Code Intelligence Error if any */}
+      {codeError && (
+        <div className="mt-6 p-4 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 text-xs flex items-start gap-3">
+          <span className="text-sm">⚠️</span>
+          <div>
+            <p className="font-semibold text-red-300">Code Intelligence Error</p>
+            <p className="mt-0.5">{codeError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Code Intelligence View */}
+      {codeData && <CodeIntelligenceView data={codeData} />}
     </div>
   );
 }

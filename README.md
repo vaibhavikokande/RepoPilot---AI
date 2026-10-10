@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1 & Day 2)
+### Implemented (Day 1, Day 2 & Day 3)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -46,15 +46,17 @@ To create an AI software engineer that can:
 - ✅ Repository scanner with ignored directories (.git, node_modules, venv, etc.)
 - ✅ Programming language detection across 20+ languages
 - ✅ Repository statistics (file count, directory count, total size, largest files)
-- ✅ Hierarchical file tree generation
-- ✅ Interactive frontend analysis results dashboard
+- ✅ Code Intelligence Engine (Python standard library AST & Tree-sitter for JS/TS)
+- ✅ Code entity extraction (classes, methods, functions, interfaces, types, signatures, line numbers)
+- ✅ Dependency & import relationship analysis (internal and external)
+- ✅ Hierarchical codebase structural map
+- ✅ Interactive frontend analysis & Code Intelligence dashboard
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (21 unit and integration tests)
+- ✅ Automated test suite (30 unit and integration tests)
 - ✅ Project documentation & architecture document
 
 ### Planned
 
-- 🧠 Code parsing with Tree-sitter
 - 📊 AI-powered code analysis
 - 🔍 RAG-based codebase Q&A
 - 🤖 Multi-agent workflow orchestration (LangGraph)
@@ -175,6 +177,24 @@ RepoPilot AI accepts public GitHub repository URLs and processes them through an
 5. **Hierarchical File Tree Generation**:
    - Constructs a navigable file tree structure for intuitive frontend visualization.
 
+## 🧠 Code Intelligence Engine
+
+RepoPilot AI moves beyond raw file listings to statically comprehend codebase syntax and architecture:
+
+1. **AST-Based Multi-Language Parsers**:
+   - **Python**: Leverages Python's native `ast` library to extract classes, decorators, methods, top-level functions, type annotations, docstrings, and imports.
+   - **JavaScript & TypeScript**: Integrates precompiled `tree-sitter` grammars (`tree-sitter-javascript`, `tree-sitter-typescript`, and TSX) to extract classes, methods, functions, arrow functions, interfaces, type aliases, and module import/export clauses.
+2. **Entity Extraction with Precise Line Ranges**:
+   - Every detected code entity (class, method, function, interface) captures exact 1-indexed `start_line` and `end_line` boundaries, signatures, docstrings, parameters, and return types.
+   - Provides granular targeting required for future code search, retrieval, and RAG chunking.
+3. **Dependency & Import Graph Mapping**:
+   - Analyzes import declarations and resolves intra-repository relationships (e.g. `app.services.user_service` → `app/services/user_service.py`).
+   - Distinguishes internal application modules from third-party external dependencies.
+4. **Hierarchical Codebase Map**:
+   - Generates an intuitive structural tree representing Directories → Files → Classes → Methods / Functions.
+5. **Fault-Tolerant Parsing**:
+   - Syntax errors or unsupported edge cases in individual files are captured as `FileParseError` records without halting codebase analysis.
+
 ## 🔌 API
 
 ### Health Check
@@ -246,6 +266,52 @@ Response:
 }
 ```
 
+### Analyze Code Intelligence
+
+```bash
+POST /api/v1/repositories/analyze-code
+```
+
+Request payload:
+
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World"
+}
+```
+
+Response:
+
+```json
+{
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "master"
+  },
+  "summary": {
+    "files_analyzed": 1,
+    "languages": {
+      "Python": 1
+    },
+    "classes": 1,
+    "functions": 2,
+    "methods": 3,
+    "imports": 4,
+    "interfaces": 0,
+    "types": 0,
+    "files_with_errors": 0
+  },
+  "files": [],
+  "entities": [],
+  "dependencies": [],
+  "codebase_tree": [],
+  "errors": [],
+  "status": "success"
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
@@ -262,7 +328,7 @@ pytest tests/ -v
 |-------|-------------|--------|
 | **Phase 1** | Foundation — Project setup, FastAPI, Next.js | ✅ Complete |
 | **Phase 2** | Repository Ingestion — URL validation, safe clone, scan & metrics | ✅ Complete |
-| **Phase 3** | Code Intelligence — Tree-sitter parsing, AST analysis | 🔲 Planned |
+| **Phase 3** | Code Intelligence — Python AST & Tree-sitter JS/TS parsing | ✅ Complete |
 | **Phase 4** | RAG Pipeline — Embeddings, pgvector, semantic search | 🔲 Planned |
 | **Phase 5** | Agentic Workflow — LangGraph, agent orchestration | 🔲 Planned |
 | **Phase 6** | Test Generation — AI-powered test creation | 🔲 Planned |
