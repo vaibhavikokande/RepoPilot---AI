@@ -4,6 +4,11 @@ from app.schemas.code_analysis import (
     CodeAnalysisRequest,
     CodeAnalysisResponse,
 )
+from app.schemas.code_search import (
+    CodeSearchRequest,
+    CodeSearchResponse,
+    CodeSearchResultItem,
+)
 from app.schemas.repository import (
     FileInfo,
     FileTreeNode,
@@ -16,6 +21,9 @@ from app.schemas.repository import (
 __all__ = [
     "CodeAnalysisRequest",
     "CodeAnalysisResponse",
+    "CodeSearchRequest",
+    "CodeSearchResponse",
+    "CodeSearchResultItem",
     "FileInfo",
     "FileTreeNode",
     "RepositoryAnalyzeRequest",
@@ -23,4 +31,5 @@ __all__ = [
     "RepositoryInfo",
     "RepositoryStatistics",
 ]
+
 

@@ -8,6 +8,8 @@ import {
   RepositoryAnalyzeResponse,
 } from "@/lib/api";
 import CodeIntelligenceView from "./CodeIntelligenceView";
+import CodeSearchView from "./CodeSearchView";
+
 
 interface RepoResultsProps {
   data: RepositoryAnalyzeResponse;
@@ -257,6 +259,9 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
           </div>
         </div>
       </div>
+
+      {/* Code Search Section */}
+      <CodeSearchView repositoryUrl={repository.url} />
 
       {/* Code Intelligence Error if any */}
       {codeError && (

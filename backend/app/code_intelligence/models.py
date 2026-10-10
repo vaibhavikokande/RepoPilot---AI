@@ -122,3 +122,31 @@ class CodeStructureNode(BaseModel):
     children: Optional[List["CodeStructureNode"]] = Field(
         None, description="Child nodes in the hierarchy"
     )
+
+
+class CodeChunk(BaseModel):
+    """A granular, semantically bounded code chunk ready for search and RAG indexing."""
+
+    chunk_id: str = Field(..., description="Unique chunk identifier (e.g. file_path#entity#L1-L20)")
+    file_path: str = Field(..., description="Relative file path from repository root")
+    entity_name: str = Field(..., description="Name of the enclosed code entity or module")
+    entity_type: str = Field(
+        ...,
+        description="Entity type: 'class', 'function', 'method', 'interface', 'type_alias', 'file_module'",
+    )
+    language: str = Field(..., description="Programming language")
+    start_line: int = Field(..., description="1-indexed starting line number")
+    end_line: int = Field(..., description="1-indexed ending line number")
+    signature: Optional[str] = Field(None, description="Function/class signature")
+    docstring: Optional[str] = Field(None, description="Docstring or comment if present")
+    parent: Optional[str] = Field(None, description="Enclosing class or module name")
+    parameters: List[str] = Field(default_factory=list, description="Parameter list")
+    return_type: Optional[str] = Field(None, description="Return type annotation")
+    decorators: List[str] = Field(default_factory=list, description="Decorators applied")
+    visibility: Optional[str] = Field(None, description="Visibility: public, private, protected")
+    code_content: str = Field(..., description="Source code text of this chunk")
+    context_header: str = Field(
+        ..., description="Descriptive context line (File, Enclosing scope, Signature)"
+    )
+    tokens_estimate: int = Field(0, description="Heuristic estimate of token count")
+

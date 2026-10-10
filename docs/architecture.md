@@ -150,17 +150,42 @@ Future RAG Layer [Planned]
   - `CodeIntelligenceAnalyzer`: Orchestrates multi-file parsing, maps intra-repo dependencies, computes quantitative summaries, and isolates syntax errors.
 - **Output**: Structured entities with 1-indexed `start_line` / `end_line` ranges, dependency maps, and codebase trees.
 
-### Code Knowledge Layer [Planned]
+### Code Chunking Engine [Implemented]
 
-- **Purpose**: Create searchable knowledge base from parsed code
-- **Tech**: Embedding models, chunking strategies
-- **Output**: Code embeddings, semantic code representations
+- **Purpose**: Deconstructs parsed files into discrete, semantically bounded code units (`CodeChunk`) for search and vector retrieval.
+- **Components**:
+  - `CodeChunker`:
+    - Slices raw code text according to exact AST entity line boundaries (`start_line` to `end_line`).
+    - Synthesizes informative `context_header` lines combining repository file path, enclosing classes, entity types, signatures, and line numbers.
+    - Computes token heuristic estimates (`tokens_estimate`) to prevent LLM context overflows in downstream RAG.
+    - Generates fallback `file_module` chunks for configuration and procedural script files lacking AST entity declarations.
 
-### Vector Database [Planned]
+### Intelligent Code Search Engine [Implemented]
 
-- **Purpose**: Store and retrieve code embeddings for RAG
-- **Tech**: PostgreSQL + pgvector
-- **Operations**: Similarity search, filtered retrieval, metadata queries
+- **Purpose**: Provides high-precision keyword, identifier, and metadata-driven search across indexed codebase chunks without requiring an active LLM.
+- **Components**:
+  - `CodeSearchEngine`:
+    - **Query Normalization**: Strips conversational question prefixes (`"Where is"`, `"how to"`, `"handled"`, `"find"`) and generic English stopwords while preserving technical tokens.
+    - **Identifier Tokenization**: Deconstructs CamelCase, PascalCase, and snake_case identifiers (`UserService` → `['user', 'service']`, `auth_token` → `['auth', 'token']`).
+    - **Domain Synonym Expansion**: Expands software engineering concepts (`auth` ↔ `authentication`, `login`; `db` ↔ `database`; `repo` ↔ `repository`).
+    - **Multi-Factor Weighted Scoring**:
+      - Exact entity name match: 10.0
+      - Split identifier tokens: 5.0 per term
+      - Enclosing class / scope match: 4.0
+      - File path & directory matches: 3.5
+      - Signature parameters & types: 3.0
+      - Docstring & comments: 2.5
+      - Decorators: 2.0
+      - Body code terms: 1.0
+    - **Match Reason & Insight Generation**: Compiles human-readable explanations explaining *why* a chunk was retrieved.
+    - **Type Filtering**: Supports filtering by `class`, `function`, `method`, `interface`.
+
+### Vector Database & Embeddings [Planned]
+
+- **Purpose**: Store and retrieve dense vector embeddings for semantic RAG queries
+- **Tech**: PostgreSQL + pgvector, dense embedding models (e.g. OpenAI text-embedding-3 or local embeddings)
+- **Operations**: Cosine similarity search, hybrid search (combining lexical + dense vector scores)
+
 
 ### RAG Pipeline [Planned]
 

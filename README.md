@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1, Day 2 & Day 3)
+### Implemented (Day 1, Day 2, Day 3 & Day 4)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -50,10 +50,15 @@ To create an AI software engineer that can:
 - ✅ Code entity extraction (classes, methods, functions, interfaces, types, signatures, line numbers)
 - ✅ Dependency & import relationship analysis (internal and external)
 - ✅ Hierarchical codebase structural map
-- ✅ Interactive frontend analysis & Code Intelligence dashboard
+- ✅ **Code Chunking Engine** with AST line slicing, context headers, and token estimation
+- ✅ **Intelligent Code Search Engine** with lexical, identifier, and metadata-driven ranking
+- ✅ Conversational query normalization and software engineering synonym expansion
+- ✅ Explainable search with human-readable match insights and criteria breakdown
+- ✅ Interactive frontend Code Search UI with type filtering and expandable snippets
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (30 unit and integration tests)
+- ✅ Automated test suite (45 unit and integration tests)
 - ✅ Project documentation & architecture document
+
 
 ### Planned
 
@@ -195,7 +200,25 @@ RepoPilot AI moves beyond raw file listings to statically comprehend codebase sy
 5. **Fault-Tolerant Parsing**:
    - Syntax errors or unsupported edge cases in individual files are captured as `FileParseError` records without halting codebase analysis.
 
+## 🔍 Code Chunking & Intelligent Code Search
+
+RepoPilot AI breaks down repositories into discrete, self-contained semantic code chunks and provides keyword, identifier, and AST metadata search:
+
+1. **Semantic Code Chunking (`CodeChunker`)**:
+   - Accurately slices source code lines using AST entity boundaries (`start_line` to `end_line`).
+   - Builds contextual header strings (`File: ... | Scope: ... | Class/Method: ... | Lines: ...`) for retrieval.
+   - Computes heuristic token estimates (`tokens_estimate`) to safeguard downstream LLM prompts.
+   - Generates fallback `file_module` chunks for procedural scripts and configuration files without entity declarations.
+2. **Lexical & Metadata Search Engine (`CodeSearchEngine`)**:
+   - **Query Normalization**: Strips conversational prefixes (`"Where is"`, `"how to"`, `"handled"`, `"find"`) while preserving key engineering terms.
+   - **Identifier Decomposition**: Automatically tokenizes CamelCase and snake_case identifiers (`UserService` → `['user', 'service']`, `auth_token` → `['auth', 'token']`).
+   - **Domain Synonym Expansion**: Expands concepts across synonymous terms (`auth` ↔ `authentication`, `login`; `db` ↔ `database`; `user` ↔ `users`).
+   - **Multi-Factor Weighted Scoring**: Rewards exact name matches, substring tokens, signatures, file paths, docstrings, decorators, and code bodies.
+   - **Explainable Match Insights**: Returns a concise sentence explaining *why* each result matched (e.g., *"Method 'authenticate_user' in 'AuthService' matches 'user', 'authentication' via entity name and signature parameters."*).
+   - **Granular Entity Filtering**: Allows targeted filtering by `function`, `class`, `method`, or `interface`.
+
 ## 🔌 API
+
 
 ### Health Check
 
@@ -312,12 +335,71 @@ Response:
 }
 ```
 
+### Search Repository Code
+
+```bash
+POST /api/v1/repositories/search-code
+```
+
+Request payload:
+
+```json
+{
+  "repository_url": "https://github.com/my-org/my-service",
+  "query": "Where is user authentication handled?",
+  "limit": 5,
+  "entity_types": ["function", "class", "method"]
+}
+```
+
+Response:
+
+```json
+{
+  "repository": {
+    "name": "my-service",
+    "owner": "my-org",
+    "url": "https://github.com/my-org/my-service",
+    "default_branch": "main"
+  },
+  "query": "Where is user authentication handled?",
+  "total_chunks_indexed": 38,
+  "total_results": 2,
+  "results": [
+    {
+      "chunk_id": "app/services.py#UserService.create_user#L50-L53",
+      "file_path": "app/services.py",
+      "entity_name": "create_user",
+      "entity_type": "method",
+      "language": "Python",
+      "start_line": 50,
+      "end_line": 53,
+      "signature": "def create_user(self, name: str) -> dict",
+      "docstring": null,
+      "parent": "UserService",
+      "parameters": ["self", "name"],
+      "return_type": "dict",
+      "code_snippet": "    def create_user(self, name: str) -> dict:\n        return {\"name\": name}\n",
+      "context_header": "File: app/services.py | Scope: UserService | Method: create_user | Lines: 50-53 | Signature: def create_user(self, name: str) -> dict",
+      "tokens_estimate": 18,
+      "score": 14.5,
+      "match_reasons": [
+        "Identifier parts matched: user",
+        "Enclosing class 'UserService' matches: user"
+      ],
+      "explanation": "Method 'create_user' in 'UserService' [app/services.py:50-53] matches query: Identifier parts matched: user."
+    }
+  ],
+  "status": "success"
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests
+# Backend tests (45 tests covering ingestion, AST parsing, chunking, and search)
 cd backend
 pytest tests/ -v
 ```
@@ -329,13 +411,14 @@ pytest tests/ -v
 | **Phase 1** | Foundation — Project setup, FastAPI, Next.js | ✅ Complete |
 | **Phase 2** | Repository Ingestion — URL validation, safe clone, scan & metrics | ✅ Complete |
 | **Phase 3** | Code Intelligence — Python AST & Tree-sitter JS/TS parsing | ✅ Complete |
-| **Phase 4** | RAG Pipeline — Embeddings, pgvector, semantic search | 🔲 Planned |
-| **Phase 5** | Agentic Workflow — LangGraph, agent orchestration | 🔲 Planned |
-| **Phase 6** | Test Generation — AI-powered test creation | 🔲 Planned |
-| **Phase 7** | Bug Detection & Fixes — Automated debugging | 🔲 Planned |
-| **Phase 8** | MCP Integration — Model Context Protocol | 🔲 Planned |
-| **Phase 9** | Evaluation — Benchmarks, quality metrics | 🔲 Planned |
-| **Phase 10** | Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 4** | Code Chunking & Intelligent Search — Lexical, AST metadata & explanations | ✅ Complete |
+| **Phase 5** | Vector Embeddings & RAG Q&A — pgvector, dense embeddings & LLM context | 🔲 Planned |
+| **Phase 6** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 7** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
+| **Phase 8** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 9** | MCP Integration — Model Context Protocol tools & sidecars | 🔲 Planned |
+| **Phase 10** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+
 
 > This project is being developed incrementally. Each day adds meaningful functionality while maintaining production-quality code standards.
 

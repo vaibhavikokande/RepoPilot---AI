@@ -216,3 +216,74 @@ export async function analyzeCodeIntelligence(
 
   return response.json();
 }
+
+/** An individual search result hit representing a matched code chunk */
+export interface CodeSearchResultItem {
+  chunk_id: string;
+  file_path: string;
+  entity_name: string;
+  entity_type: string;
+  language: string;
+  start_line: number;
+  end_line: number;
+  signature?: string | null;
+  docstring?: string | null;
+  parent?: string | null;
+  parameters?: string[];
+  return_type?: string | null;
+  code_snippet: string;
+  context_header: string;
+  tokens_estimate: number;
+  score: number;
+  match_reasons: string[];
+  explanation: string;
+}
+
+/** Response from the code search API */
+export interface CodeSearchResponse {
+  repository: RepositoryInfo;
+  query: string;
+  total_chunks_indexed: number;
+  total_results: number;
+  results: CodeSearchResultItem[];
+  status: string;
+}
+
+/**
+ * Search repository code using lexical analysis, AST metadata, and keyword matching.
+ */
+export async function searchCode(
+  repositoryUrl: string,
+  query: string,
+  limit: number = 10,
+  entityTypes?: string[]
+): Promise<CodeSearchResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/repositories/search-code`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      repository_url: repositoryUrl,
+      query,
+      limit,
+      entity_types: entityTypes && entityTypes.length > 0 ? entityTypes : undefined,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to search repository code.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+

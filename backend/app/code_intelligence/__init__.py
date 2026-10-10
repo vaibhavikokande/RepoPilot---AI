@@ -1,7 +1,9 @@
 """Code Intelligence Engine for RepoPilot AI."""
 
 from app.code_intelligence.analyzer import CodeIntelligenceAnalyzer
+from app.code_intelligence.chunker import CodeChunker
 from app.code_intelligence.models import (
+    CodeChunk,
     CodebaseSummary,
     CodeEntity,
     CodeFile,
@@ -16,12 +18,16 @@ from app.code_intelligence.parser import (
     JavaScriptTypeScriptParser,
     PythonParser,
 )
+from app.code_intelligence.search import CodeSearchEngine
 from app.code_intelligence.tree_builder import CodebaseTreeBuilder
 
 __all__ = [
     "BaseCodeParser",
+    "CodeChunk",
+    "CodeChunker",
     "CodeIntelligenceAnalyzer",
     "CodeParserManager",
+    "CodeSearchEngine",
     "CodebaseSummary",
     "CodebaseTreeBuilder",
     "CodeEntity",
@@ -33,3 +39,4 @@ __all__ = [
     "JavaScriptTypeScriptParser",
     "PythonParser",
 ]
+
