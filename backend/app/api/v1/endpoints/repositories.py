@@ -7,8 +7,10 @@ from app.code_intelligence import (
     CodeChunker,
     CodeIntelligenceAnalyzer,
     CodeSearchEngine,
+    HybridCodeSearchService,
 )
 from app.core.config import get_settings
+from app.embeddings import EmbeddingService
 from app.schemas.code_analysis import (
     CodeAnalysisRequest,
     CodeAnalysisResponse,
@@ -17,12 +19,18 @@ from app.schemas.code_search import (
     CodeSearchRequest,
     CodeSearchResponse,
     CodeSearchResultItem,
+    RepositoryIndexRequest,
+    RepositoryIndexResponse,
+    SemanticSearchRequest,
+    SemanticSearchResponse,
+    SemanticSearchResultItem,
 )
 from app.schemas.repository import (
     RepositoryAnalyzeRequest,
     RepositoryAnalyzeResponse,
     RepositoryInfo,
 )
+from app.vector_store import ChromaVectorStore
 from app.services.github_service import (
     GitHubService,
     InvalidRepositoryURLError,
@@ -349,5 +357,263 @@ async def search_repository_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while searching the repository code.",
         ) from exc
+
+
+@router.post(
+    "/index",
+    response_model=RepositoryIndexResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Index repository code chunks into vector store",
+    description=(
+        "Clones the repository, statically analyzes AST entities, chunks code units, "
+        "computes dense embeddings using configured model, and persists vectors and metadata "
+        "in ChromaDB with repository-level isolation."
+    ),
+)
+async def index_repository(
+    request: RepositoryIndexRequest,
+) -> RepositoryIndexResponse:
+    """Index repository code chunks into the persistent vector store.
+
+    Args:
+        request: Repository URL and optional force_reindex flag.
+
+    Returns:
+        RepositoryIndexResponse with indexing statistics and vector dimensions.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for indexing: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Clone, chunk, embed, and persist vectors
+    repo_service = RepositoryService()
+    analyzer = CodeIntelligenceAnalyzer()
+    chunker = CodeChunker()
+    embedding_service = EmbeddingService()
+    vector_store = ChromaVectorStore()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            _, files, _, _, _, _ = analyzer.analyze_repository(repo_path)
+            chunks = chunker.chunk_repository(repo_path=repo_path, code_files=files)
+
+            if not chunks:
+                return RepositoryIndexResponse(
+                    repository=RepositoryInfo(
+                        name=parsed_repo.name,
+                        owner=parsed_repo.owner,
+                        url=parsed_repo.url,
+                        default_branch=default_branch,
+                    ),
+                    status="success",
+                    files_processed=len(files),
+                    chunks_indexed=0,
+                    chunks_skipped=0,
+                    embedding_model=embedding_service.model_name,
+                    dimension=embedding_service.dimension,
+                    total_vectors_in_index=0,
+                    message="Repository contains no parseable code chunks to index.",
+                )
+
+            # Generate embeddings in batches
+            embeddings = await embedding_service.embed_chunks(chunks)
+
+            # Persist in ChromaDB collection
+            index_metrics = vector_store.index_chunks(
+                repo_url=parsed_repo.url,
+                chunks=chunks,
+                embeddings=embeddings,
+                embedding_model=embedding_service.model_name,
+                dimension=embedding_service.dimension,
+                force_reindex=request.force_reindex,
+            )
+
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return RepositoryIndexResponse(
+                repository=repo_info,
+                status="success",
+                files_processed=len(files),
+                chunks_indexed=len(chunks),
+                chunks_skipped=0,
+                embedding_model=embedding_service.model_name,
+                dimension=embedding_service.dimension,
+                total_vectors_in_index=index_metrics.get("total_chunks", len(chunks)),
+                message="Repository successfully indexed into persistent vector store.",
+            )
+
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error while indexing repository: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while indexing the repository.",
+        ) from exc
+
+
+@router.post(
+    "/semantic-search",
+    response_model=SemanticSearchResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Semantic and hybrid code search using vector similarity and rank fusion",
+    description=(
+        "Retrieves relevant code chunks using vector embeddings, keyword relevance, or hybrid RRF fusion. "
+        "Automatically checks or builds the repository vector index if not yet present."
+    ),
+)
+async def semantic_search_repository(
+    request: SemanticSearchRequest,
+) -> SemanticSearchResponse:
+    """Perform semantic or hybrid search across indexed repository code chunks.
+
+    Args:
+        request: Natural language query, repository URL, limit, entity_types, and search mode.
+
+    Returns:
+        SemanticSearchResponse containing matching code entities, snippets, line numbers, and scores.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    repo_service = RepositoryService()
+    analyzer = CodeIntelligenceAnalyzer()
+    chunker = CodeChunker()
+    embedding_service = EmbeddingService()
+    vector_store = ChromaVectorStore()
+    hybrid_search = HybridCodeSearchService(
+        embedding_service=embedding_service,
+        vector_store=vector_store,
+    )
+
+    try:
+        # Check if vector index exists; if not or if lexical/hybrid requires in-memory chunks, clone repository
+        index_exists = vector_store.collection_exists(parsed_repo.url)
+        needs_chunks = (request.mode.lower() in ("lexical", "hybrid")) or (not index_exists)
+
+        chunks = None
+        default_branch = None
+
+        if needs_chunks:
+            with repo_service.cloned_repository(
+                clone_url=parsed_repo.clone_url,
+                owner=parsed_repo.owner,
+                name=parsed_repo.name,
+            ) as (repo_path, branch):
+                default_branch = branch
+                _, files, _, _, _, _ = analyzer.analyze_repository(repo_path)
+                chunks = chunker.chunk_repository(repo_path=repo_path, code_files=files)
+
+                # If collection was missing, index the chunks now
+                if not index_exists and chunks:
+                    embeddings = await embedding_service.embed_chunks(chunks)
+                    vector_store.index_chunks(
+                        repo_url=parsed_repo.url,
+                        chunks=chunks,
+                        embeddings=embeddings,
+                        embedding_model=embedding_service.model_name,
+                        dimension=embedding_service.dimension,
+                    )
+
+        # Run search via hybrid search service
+        raw_hits = await hybrid_search.search(
+            repo_url=parsed_repo.url,
+            query=request.query,
+            chunks=chunks,
+            mode=request.mode,
+            limit=request.limit,
+            entity_types=request.entity_types,
+        )
+
+        results = [
+            SemanticSearchResultItem(
+                chunk_id=hit["chunk_id"],
+                file_path=hit["file_path"],
+                entity_name=hit["entity_name"],
+                entity_type=hit["entity_type"],
+                language=hit["language"],
+                start_line=hit["start_line"],
+                end_line=hit["end_line"],
+                signature=hit["signature"],
+                docstring=hit["docstring"],
+                parent=hit["parent"],
+                code_snippet=hit["code_snippet"],
+                context_header=hit["context_header"],
+                tokens_estimate=hit["tokens_estimate"],
+                score=hit["score"],
+                search_mode=hit["search_mode"],
+                match_reasons=hit["match_reasons"],
+                explanation=hit["explanation"],
+            )
+            for hit in raw_hits
+        ]
+
+        repo_info = RepositoryInfo(
+            name=parsed_repo.name,
+            owner=parsed_repo.owner,
+            url=parsed_repo.url,
+            default_branch=default_branch,
+        )
+
+        return SemanticSearchResponse(
+            repository=repo_info,
+            query=request.query,
+            search_mode=request.mode,
+            total_results=len(results),
+            results=results,
+            status="success",
+        )
+
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during semantic search: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred during semantic search.",
+        ) from exc
+
 
 

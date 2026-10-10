@@ -48,3 +48,8 @@ tmp/
 backend/workspace/
 backend/repositories/
 backend/tmp/
+
+# Vector Store
+chroma_db/
+backend/chroma_db/
+

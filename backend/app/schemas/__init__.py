@@ -8,6 +8,11 @@ from app.schemas.code_search import (
     CodeSearchRequest,
     CodeSearchResponse,
     CodeSearchResultItem,
+    RepositoryIndexRequest,
+    RepositoryIndexResponse,
+    SemanticSearchRequest,
+    SemanticSearchResponse,
+    SemanticSearchResultItem,
 )
 from app.schemas.repository import (
     FileInfo,
@@ -28,8 +33,14 @@ __all__ = [
     "FileTreeNode",
     "RepositoryAnalyzeRequest",
     "RepositoryAnalyzeResponse",
+    "RepositoryIndexRequest",
+    "RepositoryIndexResponse",
     "RepositoryInfo",
     "RepositoryStatistics",
+    "SemanticSearchRequest",
+    "SemanticSearchResponse",
+    "SemanticSearchResultItem",
 ]
+
 
 

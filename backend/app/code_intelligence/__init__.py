@@ -18,6 +18,7 @@ from app.code_intelligence.parser import (
     JavaScriptTypeScriptParser,
     PythonParser,
 )
+from app.code_intelligence.hybrid_search import HybridCodeSearchService
 from app.code_intelligence.search import CodeSearchEngine
 from app.code_intelligence.tree_builder import CodebaseTreeBuilder
 
@@ -36,7 +37,9 @@ __all__ = [
     "CodeStructureNode",
     "DependencyRelation",
     "FileParseError",
+    "HybridCodeSearchService",
     "JavaScriptTypeScriptParser",
     "PythonParser",
 ]
+
 

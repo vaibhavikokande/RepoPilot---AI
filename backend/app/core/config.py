@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     clone_timeout_seconds: int = 60
     max_file_tree_depth: int = 4
 
+    # Embedding & Vector Store (Day 5)
+    embedding_provider: str = "local"
+    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_api_key: str = ""
+    embedding_batch_size: int = 32
+    chroma_persist_dir: str = "chroma_db"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1, Day 2, Day 3 & Day 4)
+### Implemented (Day 1, Day 2, Day 3, Day 4 & Day 5)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -52,12 +52,16 @@ To create an AI software engineer that can:
 - ✅ Hierarchical codebase structural map
 - ✅ **Code Chunking Engine** with AST line slicing, context headers, and token estimation
 - ✅ **Intelligent Code Search Engine** with lexical, identifier, and metadata-driven ranking
+- ✅ **Vector Index & Embeddings** (ChromaDB persistent storage, local ONNX `all-MiniLM-L6-v2`, OpenAI support)
+- ✅ **Semantic Code Search** with cosine vector similarity and natural language query understanding
+- ✅ **Hybrid Search with Reciprocal Rank Fusion (RRF)** combining keyword and vector retrieval
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
-- ✅ Interactive frontend Code Search UI with type filtering and expandable snippets
+- ✅ Interactive frontend with Search Mode toggle (`Semantic`, `Hybrid`, `Keyword`) and 1-click Vector Indexing
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (45 unit and integration tests)
+- ✅ Automated test suite (58 unit and integration tests)
 - ✅ Project documentation & architecture document
+
 
 
 ### Planned
@@ -217,7 +221,28 @@ RepoPilot AI breaks down repositories into discrete, self-contained semantic cod
    - **Explainable Match Insights**: Returns a concise sentence explaining *why* each result matched (e.g., *"Method 'authenticate_user' in 'AuthService' matches 'user', 'authentication' via entity name and signature parameters."*).
    - **Granular Entity Filtering**: Allows targeted filtering by `function`, `class`, `method`, or `interface`.
 
+## 🧠 Semantic Code Search & Vector Index
+
+RepoPilot AI integrates deep vector representations to understand code meaning beyond exact token matches:
+
+1. **Provider-Agnostic Embeddings Architecture (`backend/app/embeddings/`)**:
+   - `BaseEmbeddingProvider`: Abstract interface for batch text embedding, query embedding, and vector dimension verification.
+   - **Local ONNX Provider (`LocalChromaEmbeddingProvider`)**: Runs `all-MiniLM-L6-v2` (384 dimensions) natively via ONNX Runtime without external network or API key dependencies.
+   - **Hosted Provider (`OpenAIEmbeddingProvider`)**: Connects to OpenAI embeddings API (`text-embedding-3-small`, 1536 dimensions) when API key is configured.
+   - **Mock Provider (`MockEmbeddingProvider`)**: Deterministic unit-normalized vector generator for fast, isolated test runs.
+   - `EmbeddingService`: Orchestrates chunk formatting (`File + Entity + Signature + Docstring + Code`), batched requests, exponential backoff retries, and dimension validation.
+2. **Persistent Vector Store (`ChromaVectorStore`)**:
+   - Persistent local ChromaDB storage under `backend/chroma_db/`.
+   - **Repository-Level Collection Isolation**: Deterministic collection namespaces (`repo_<hash>`) ensure codebases never mix vectors.
+   - **Model Mismatch Guard**: Detects if embedding model or dimension changed and safely rebuilds collection instead of mixing incompatible spaces.
+   - Upserts vectors, identifiers, code documents, and comprehensive metadata in batches.
+3. **Hybrid Search with Reciprocal Rank Fusion (RRF)**:
+   - Combines lexical keyword scores with semantic vector cosine similarity using Reciprocal Rank Fusion:
+     $$RRF(d) = \sum_{m \in \{lexical, semantic\}} \frac{w_m}{60 + rank_m(d)}$$
+   - Seamlessly returns results in `semantic`, `hybrid`, or `lexical` search modes.
+
 ## 🔌 API
+
 
 
 ### Health Check
@@ -394,12 +419,107 @@ Response:
 }
 ```
 
+### Index Repository (Vector Embeddings)
+
+```bash
+POST /api/v1/repositories/index
+```
+
+Request payload:
+
+```json
+{
+  "repository_url": "https://github.com/my-org/my-service",
+  "force_reindex": false
+}
+```
+
+Response:
+
+```json
+{
+  "repository": {
+    "name": "my-service",
+    "owner": "my-org",
+    "url": "https://github.com/my-org/my-service",
+    "default_branch": "main"
+  },
+  "status": "success",
+  "files_processed": 14,
+  "chunks_indexed": 38,
+  "chunks_skipped": 0,
+  "embedding_model": "all-MiniLM-L6-v2",
+  "dimension": 384,
+  "total_vectors_in_index": 38,
+  "message": "Repository successfully indexed into persistent vector store."
+}
+```
+
+### Semantic & Hybrid Search
+
+```bash
+POST /api/v1/repositories/semantic-search
+```
+
+Request payload:
+
+```json
+{
+  "repository_url": "https://github.com/my-org/my-service",
+  "query": "Where does the application validate user login credentials?",
+  "limit": 5,
+  "mode": "semantic",
+  "entity_types": ["function", "class", "method"]
+}
+```
+
+Response:
+
+```json
+{
+  "repository": {
+    "name": "my-service",
+    "owner": "my-org",
+    "url": "https://github.com/my-org/my-service",
+    "default_branch": "main"
+  },
+  "query": "Where does the application validate user login credentials?",
+  "search_mode": "semantic",
+  "total_results": 1,
+  "results": [
+    {
+      "chunk_id": "app/services/auth.py#AuthService.login#L15-L35",
+      "file_path": "app/services/auth.py",
+      "entity_name": "login",
+      "entity_type": "method",
+      "language": "Python",
+      "start_line": 15,
+      "end_line": 35,
+      "signature": "def login(username: str, token: str) -> bool",
+      "docstring": "Validate credentials token against database.",
+      "parent": "AuthService",
+      "code_snippet": "    def login(username: str, token: str) -> bool:\n        return self.verify(token)\n",
+      "context_header": "File: app/services/auth.py | Scope: AuthService | Method: login | Lines: 15-35",
+      "tokens_estimate": 24,
+      "score": 0.8421,
+      "search_mode": "semantic",
+      "match_reasons": [
+        "Semantic similarity: 0.84",
+        "Embedding cosine distance: 0.158"
+      ],
+      "explanation": "Method 'login' in app/services/auth.py semantically aligns with query (similarity 0.84)."
+    }
+  ],
+  "status": "success"
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (45 tests covering ingestion, AST parsing, chunking, and search)
+# Backend tests (58 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, and search)
 cd backend
 pytest tests/ -v
 ```
@@ -412,12 +532,13 @@ pytest tests/ -v
 | **Phase 2** | Repository Ingestion — URL validation, safe clone, scan & metrics | ✅ Complete |
 | **Phase 3** | Code Intelligence — Python AST & Tree-sitter JS/TS parsing | ✅ Complete |
 | **Phase 4** | Code Chunking & Intelligent Search — Lexical, AST metadata & explanations | ✅ Complete |
-| **Phase 5** | Vector Embeddings & RAG Q&A — pgvector, dense embeddings & LLM context | 🔲 Planned |
+| **Phase 5** | Vector Embeddings & Semantic Search — ChromaDB, ONNX all-MiniLM-L6-v2 & RRF Hybrid Retrieval | ✅ Complete |
 | **Phase 6** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
 | **Phase 7** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
 | **Phase 8** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
 | **Phase 9** | MCP Integration — Model Context Protocol tools & sidecars | 🔲 Planned |
 | **Phase 10** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+
 
 
 > This project is being developed incrementally. Each day adds meaningful functionality while maintaining production-quality code standards.

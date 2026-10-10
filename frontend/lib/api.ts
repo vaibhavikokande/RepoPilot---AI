@@ -287,3 +287,122 @@ export async function searchCode(
   return response.json();
 }
 
+/** Response from repository vector indexing */
+export interface RepositoryIndexResponse {
+  repository: RepositoryInfo;
+  status: string;
+  files_processed: number;
+  chunks_indexed: number;
+  chunks_skipped: number;
+  embedding_model: string;
+  dimension: number;
+  total_vectors_in_index: number;
+  message: string;
+}
+
+/** Hit returned from semantic or hybrid retrieval */
+export interface SemanticSearchResultItem {
+  chunk_id: string;
+  file_path: string;
+  entity_name: string;
+  entity_type: string;
+  language: string;
+  start_line: number;
+  end_line: number;
+  signature?: string | null;
+  docstring?: string | null;
+  parent?: string | null;
+  code_snippet: string;
+  context_header: string;
+  tokens_estimate: number;
+  score: number;
+  search_mode: string;
+  match_reasons: string[];
+  explanation: string;
+}
+
+/** Full response from semantic or hybrid search */
+export interface SemanticSearchResponse {
+  repository: RepositoryInfo;
+  query: string;
+  search_mode: string;
+  total_results: number;
+  results: SemanticSearchResultItem[];
+  status: string;
+}
+
+/**
+ * Trigger vector indexing for a repository.
+ */
+export async function indexRepository(
+  repositoryUrl: string,
+  forceReindex: boolean = false
+): Promise<RepositoryIndexResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/repositories/index`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      repository_url: repositoryUrl,
+      force_reindex: forceReindex,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to index repository.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+/**
+ * Execute semantic, lexical, or hybrid code search.
+ */
+export async function semanticSearch(
+  repositoryUrl: string,
+  query: string,
+  limit: number = 10,
+  entityTypes?: string[],
+  mode: string = "semantic"
+): Promise<SemanticSearchResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/repositories/semantic-search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      repository_url: repositoryUrl,
+      query,
+      limit,
+      entity_types: entityTypes && entityTypes.length > 0 ? entityTypes : undefined,
+      mode,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to perform semantic search.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+

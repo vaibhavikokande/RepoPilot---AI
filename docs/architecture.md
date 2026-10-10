@@ -180,11 +180,17 @@ Future RAG Layer [Planned]
     - **Match Reason & Insight Generation**: Compiles human-readable explanations explaining *why* a chunk was retrieved.
     - **Type Filtering**: Supports filtering by `class`, `function`, `method`, `interface`.
 
-### Vector Database & Embeddings [Planned]
+### Vector Database & Embeddings [Implemented]
 
-- **Purpose**: Store and retrieve dense vector embeddings for semantic RAG queries
-- **Tech**: PostgreSQL + pgvector, dense embedding models (e.g. OpenAI text-embedding-3 or local embeddings)
-- **Operations**: Cosine similarity search, hybrid search (combining lexical + dense vector scores)
+- **Purpose**: Persist dense code chunk embeddings and perform semantic similarity queries with repository-level isolation.
+- **Tech**: ChromaDB with persistent local storage, ONNX `all-MiniLM-L6-v2` (384 dimensions) for local execution, and optional hosted OpenAI `text-embedding-3-small` (1536 dimensions).
+- **Features**:
+  - Deterministic repository namespaces (`repo_<hash>`) ensuring zero inter-repository data contamination.
+  - Model and dimension mismatch guard protecting vector index integrity.
+  - Batched upserts with comprehensive chunk metadata (line ranges, signatures, docstrings, scopes).
+  - Cosine distance and similarity score computation.
+  - Hybrid Search via Reciprocal Rank Fusion (RRF) integrating lexical and semantic rank orders.
+
 
 
 ### RAG Pipeline [Planned]

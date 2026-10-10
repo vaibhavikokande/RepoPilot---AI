@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import {
-  CodeSearchResultItem,
-  searchCode,
+  indexRepository,
+  RepositoryIndexResponse,
+  semanticSearch,
+  SemanticSearchResultItem,
 } from "@/lib/api";
 
 interface CodeSearchViewProps {
@@ -12,26 +14,49 @@ interface CodeSearchViewProps {
 
 export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
   const [query, setQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<"semantic" | "hybrid" | "lexical">("semantic");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(false);
+  const [isIndexing, setIsIndexing] = useState(false);
+  const [indexStats, setIndexStats] = useState<RepositoryIndexResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<CodeSearchResultItem[] | null>(null);
-  const [totalIndexed, setTotalIndexed] = useState<number | null>(null);
+  const [indexError, setIndexError] = useState<string | null>(null);
+  const [results, setResults] = useState<SemanticSearchResultItem[] | null>(null);
   const [searchedQuery, setSearchedQuery] = useState<string>("");
+  const [searchedMode, setSearchedMode] = useState<string>("semantic");
   const [expandedSnippets, setExpandedSnippets] = useState<Record<string, boolean>>({});
 
   const sampleQueries = [
-    "Where is user authentication handled?",
-    "database connection",
-    "create user",
-    "repository scanner",
-    "parse AST",
+    "Where does the application validate user login credentials?",
+    "Find database connection logic and error handlers",
+    "Create user account and profile operations",
+    "Repository scanner and file tree builder",
+    "Parse AST and extract code entities",
   ];
 
-  const handleSearch = async (overrideQuery?: string, overrideType?: string) => {
+  const handleIndexRepository = async (force: boolean = false) => {
+    setIsIndexing(true);
+    setIndexError(null);
+    try {
+      const stats = await indexRepository(repositoryUrl, force);
+      setIndexStats(stats);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to index repository.";
+      setIndexError(msg);
+    } finally {
+      setIsIndexing(false);
+    }
+  };
+
+  const handleSearch = async (
+    overrideQuery?: string,
+    overrideMode?: "semantic" | "hybrid" | "lexical",
+    overrideType?: string
+  ) => {
     const q = (overrideQuery ?? query).trim();
     if (!q) return;
 
+    const m = overrideMode ?? searchMode;
     const t = overrideType ?? selectedType;
     const entityTypes = t === "all" ? undefined : [t];
 
@@ -39,10 +64,11 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
     setError(null);
 
     try {
-      const res = await searchCode(repositoryUrl, q, 10, entityTypes);
+      const res = await semanticSearch(repositoryUrl, q, 10, entityTypes, m);
       setResults(res.results);
-      setTotalIndexed(res.total_chunks_indexed);
       setSearchedQuery(res.query);
+      setSearchedMode(res.search_mode);
+
       // Auto-expand the top result snippet for immediate preview
       if (res.results.length > 0) {
         setExpandedSnippets({ [res.results[0].chunk_id]: true });
@@ -97,24 +123,122 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
     }
   };
 
+  const getModeBadgeClass = (mode: string) => {
+    if (mode.includes("semantic")) {
+      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+    }
+    if (mode.includes("hybrid")) {
+      return "bg-purple-500/15 text-purple-300 border-purple-500/30";
+    }
+    return "bg-sky-500/15 text-sky-300 border-sky-500/30";
+  };
+
+  const formatScore = (hit: SemanticSearchResultItem) => {
+    if (hit.search_mode.includes("semantic")) {
+      return `Similarity: ${hit.score.toFixed(3)}`;
+    }
+    if (hit.search_mode.includes("hybrid")) {
+      return `RRF: ${hit.score.toFixed(4)}`;
+    }
+    return `Score: ${hit.score.toFixed(1)}`;
+  };
+
   return (
     <div className="bg-surface/30 border border-border rounded-xl p-5 sm:p-6 mt-6">
-      {/* Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+      {/* Title & Index Action Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-lg">🔍</span>
+            <span className="text-xl">🧠</span>
             <h4 className="text-base font-bold text-foreground">
-              Intelligent Code Search
+              Semantic Code Search & Vector Index
             </h4>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary-hover border border-primary/20 font-semibold uppercase tracking-wider">
-              Lexical & Metadata
+              ChromaDB + all-MiniLM-L6-v2
             </span>
           </div>
           <p className="text-xs text-muted mt-1">
-            Search functions, classes, methods, and modules using natural query terms or code identifiers
+            Search codebase by conceptual meaning, natural language, or identifiers using persistent text embeddings
           </p>
         </div>
+
+        {/* Index Repository Button */}
+        <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={() => handleIndexRepository(false)}
+            disabled={isIndexing}
+            className="text-xs px-3.5 py-1.5 rounded-lg border border-purple-500/40 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
+          >
+            {isIndexing ? (
+              <>
+                <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>Embedding Chunks...</span>
+              </>
+            ) : (
+              <>
+                <span>⚡</span>
+                <span>{indexStats ? "Re-index Repository" : "Index Repository Vectors"}</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Index Status Banner if indexed */}
+      {indexStats && (
+        <div className="mb-4 p-3 rounded-lg border border-purple-500/30 bg-purple-500/10 text-xs flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-purple-200">
+            <span>✓</span>
+            <span className="font-semibold">{indexStats.message}</span>
+            <span className="text-purple-300/80">
+              ({indexStats.chunks_indexed} chunks • {indexStats.dimension}-dim vectors)
+            </span>
+          </div>
+          <span className="text-[11px] font-mono text-purple-300/70">
+            Model: {indexStats.embedding_model}
+          </span>
+        </div>
+      )}
+
+      {/* Index Error Banner */}
+      {indexError && (
+        <div className="mb-4 p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-200 text-xs">
+          <strong>Indexing Error:</strong> {indexError}
+        </div>
+      )}
+
+      {/* Search Mode Toggle Tabs */}
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs text-muted font-medium mr-1">Mode:</span>
+        {[
+          { id: "semantic", label: "Semantic Search", icon: "🧠" },
+          { id: "hybrid", label: "Hybrid (RRF Fusion)", icon: "⚡" },
+          { id: "lexical", label: "Keyword Search", icon: "🔍" },
+        ].map((modeOption) => (
+          <button
+            key={modeOption.id}
+            type="button"
+            onClick={() => {
+              const m = modeOption.id as "semantic" | "hybrid" | "lexical";
+              setSearchMode(m);
+              if (results !== null && query.trim()) {
+                handleSearch(query, m, selectedType);
+              }
+            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+              searchMode === modeOption.id
+                ? "bg-primary text-white border-primary shadow-sm"
+                : "bg-card border-border text-muted hover:text-foreground hover:bg-surface"
+            }`}
+          >
+            <span>{modeOption.icon}</span>
+            <span>{modeOption.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Search Input Box */}
@@ -144,7 +268,13 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. Where is user authentication handled? or UserService"
+              placeholder={
+                searchMode === "semantic"
+                  ? "Describe what you're looking for (e.g. Where does the application validate user login credentials?)"
+                  : searchMode === "hybrid"
+                  ? "Natural language or keywords (e.g. authenticate user token or UserService)"
+                  : "Keywords or identifiers (e.g. create_user, AuthService)"
+              }
               className="w-full bg-card border border-border rounded-lg py-2.5 pl-10 pr-4 text-xs font-mono text-foreground placeholder:text-muted/60 focus:outline-none focus:border-primary/50 transition-colors"
             />
           </div>
@@ -160,7 +290,7 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
-                <span>Searching...</span>
+                <span>Searching Vectors...</span>
               </>
             ) : (
               <span>Search Code</span>
@@ -186,7 +316,7 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
               onClick={() => {
                 setSelectedType(typeOption.id);
                 if (results !== null && query.trim()) {
-                  handleSearch(query, typeOption.id);
+                  handleSearch(query, searchMode, typeOption.id);
                 }
               }}
               className={`px-2.5 py-1 rounded text-[11px] font-medium border transition-colors cursor-pointer ${
@@ -209,9 +339,9 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
               type="button"
               onClick={() => {
                 setQuery(sample);
-                handleSearch(sample, selectedType);
+                handleSearch(sample, searchMode, selectedType);
               }}
-              className="text-[11px] px-2 py-0.5 rounded bg-surface border border-border/60 text-muted hover:text-primary-hover transition-colors cursor-pointer"
+              className="text-[11px] px-2 py-0.5 rounded bg-surface border border-border/60 text-muted hover:text-primary-hover transition-colors cursor-pointer max-w-[260px] truncate"
             >
               &quot;{sample}&quot;
             </button>
@@ -233,10 +363,10 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
             <span>
               Query: <strong className="text-foreground">&quot;{searchedQuery}&quot;</strong> • Found{" "}
               <strong className="text-primary-hover">{results.length}</strong> match
-              {results.length === 1 ? "" : "es"}
-              {totalIndexed !== null && (
-                <span className="text-muted/70"> (out of {totalIndexed} indexed chunks)</span>
-              )}
+              {results.length === 1 ? "" : "es"} via{" "}
+              <span className={`px-2 py-0.5 rounded border text-[11px] font-semibold ${getModeBadgeClass(searchedMode)}`}>
+                {searchedMode.toUpperCase()}
+              </span>
             </span>
           </div>
 
@@ -245,7 +375,7 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
             <div className="p-6 text-center bg-card/60 rounded-lg border border-border/60">
               <p className="text-sm text-foreground font-semibold">No matches found</p>
               <p className="text-xs text-muted mt-1">
-                Try broader keywords, identifier names, or removing specific type filters.
+                Try rephrasing your description or switching search mode to Hybrid or Keyword.
               </p>
             </div>
           ) : (
@@ -276,11 +406,18 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
                         >
                           {hit.entity_type}
                         </span>
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded border ${getModeBadgeClass(
+                            hit.search_mode
+                          )}`}
+                        >
+                          {hit.search_mode}
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono font-semibold">
-                          Score: {hit.score}
+                          {formatScore(hit)}
                         </span>
                         <span className="text-[10px] text-muted/60 font-mono">
                           ~{hit.tokens_estimate} tokens
@@ -302,7 +439,7 @@ export default function CodeSearchView({ repositoryUrl }: CodeSearchViewProps) {
                       </span>
                     </div>
 
-                    {/* Human Explanation Box */}
+                    {/* Explanation Insight Box */}
                     <div className="mt-2.5 p-2.5 rounded-lg bg-surface/70 border border-border/60 text-xs">
                       <p className="text-foreground leading-relaxed">
                         <strong className="text-primary-hover font-semibold">Match Insight: </strong>
