@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1, Day 2, Day 3, Day 4 & Day 5)
+### Implemented (Day 1, Day 2, Day 3, Day 4, Day 5 & Day 6)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -55,19 +55,20 @@ To create an AI software engineer that can:
 - ✅ **Vector Index & Embeddings** (ChromaDB persistent storage, local ONNX `all-MiniLM-L6-v2`, OpenAI support)
 - ✅ **Semantic Code Search** with cosine vector similarity and natural language query understanding
 - ✅ **Hybrid Search with Reciprocal Rank Fusion (RRF)** combining keyword and vector retrieval
+- ✅ **RAG-Based Code Understanding** (`POST /api/v1/repositories/ask`)
+- ✅ **Strict Code Grounding & Verified Source Citations** (`[S1]`, `[S2]`, file paths, line ranges)
+- ✅ **Prompt Injection Defenses & Untrusted Code Boundaries**
+- ✅ **Multi-Provider LLM Engine** (OpenAI `gpt-4o-mini` with deterministic `MockLLMGenerator` fallback)
+- ✅ **Interactive "Ask RepoPilot" UI** with suggested questions, citation badge links, and code inspector
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
-- ✅ Interactive frontend with Search Mode toggle (`Semantic`, `Hybrid`, `Keyword`) and 1-click Vector Indexing
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (58 unit and integration tests)
+- ✅ Automated test suite (75 unit and integration tests passing in <1s)
 - ✅ Project documentation & architecture document
-
-
 
 ### Planned
 
-- 📊 AI-powered code analysis
-- 🔍 RAG-based codebase Q&A
+- 📊 Deep AI-powered code analysis
 - 🤖 Multi-agent workflow orchestration (LangGraph)
 - 🧪 Automated test generation
 - 🐛 Bug detection and fix suggestions
@@ -514,12 +515,74 @@ Response:
 }
 ```
 
+### 4. RAG Code Understanding (`POST /api/v1/repositories/ask`)
+
+Ask natural language questions about the codebase and receive grounded answers with verified source citations:
+
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "question": "How does authentication work in this project?",
+  "top_k": 5
+}
+```
+
+**Example Response:**
+```json
+{
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "main"
+  },
+  "question": "How does authentication work in this project?",
+  "answer": "Based on the codebase analysis, authentication is handled in [S1] via `verify_token` in `app/auth.py`. User sessions are managed by `SessionManager` in [S2].",
+  "citations": [
+    {
+      "source_id": "S1",
+      "file_path": "app/auth.py",
+      "start_line": 15,
+      "end_line": 42,
+      "entity_name": "verify_token",
+      "entity_type": "function",
+      "score": 0.892
+    },
+    {
+      "source_id": "S2",
+      "file_path": "app/session.py",
+      "start_line": 1,
+      "end_line": 35,
+      "entity_name": "SessionManager",
+      "entity_type": "class",
+      "score": 0.841
+    }
+  ],
+  "sources": [
+    {
+      "source_id": "S1",
+      "chunk_id": "chunk_auth_verify",
+      "file_path": "app/auth.py",
+      "start_line": 15,
+      "end_line": 42,
+      "entity_name": "verify_token",
+      "entity_type": "function",
+      "language": "python",
+      "code_content": "def verify_token(token: str) -> bool:\n    ...",
+      "score": 0.892
+    }
+  ],
+  "retrieved_chunks": 2,
+  "status": "success"
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (58 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, and search)
+# Backend tests (75 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, and RAG pipeline)
 cd backend
 pytest tests/ -v
 ```
@@ -533,10 +596,10 @@ pytest tests/ -v
 | **Phase 3** | Code Intelligence — Python AST & Tree-sitter JS/TS parsing | ✅ Complete |
 | **Phase 4** | Code Chunking & Intelligent Search — Lexical, AST metadata & explanations | ✅ Complete |
 | **Phase 5** | Vector Embeddings & Semantic Search — ChromaDB, ONNX all-MiniLM-L6-v2 & RRF Hybrid Retrieval | ✅ Complete |
-| **Phase 6** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 7** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
-| **Phase 8** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 9** | MCP Integration — Model Context Protocol tools & sidecars | 🔲 Planned |
+| **Phase 6** | RAG-Based Code Understanding — Evidence grounding, prompt injection defenses & verified citations | ✅ Complete |
+| **Phase 7** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 8** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
+| **Phase 9** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
 | **Phase 10** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 

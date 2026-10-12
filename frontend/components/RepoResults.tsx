@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import CodeIntelligenceView from "./CodeIntelligenceView";
 import CodeSearchView from "./CodeSearchView";
+import AskRepoPilot from "./AskRepoPilot";
 
 
 interface RepoResultsProps {
@@ -259,6 +260,9 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
           </div>
         </div>
       </div>
+
+      {/* Ask RepoPilot (RAG Code Understanding) */}
+      <AskRepoPilot repositoryUrl={repository.url} />
 
       {/* Code Search Section */}
       <CodeSearchView repositoryUrl={repository.url} />

@@ -405,4 +405,85 @@ export async function semanticSearch(
   return response.json();
 }
 
+/** A verified source citation referencing a code chunk in the generated answer */
+export interface CodeCitation {
+  source_id: string;
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  entity_name: string;
+  entity_type: string;
+  score: number;
+}
+
+/** A code chunk retrieved from the repository and provided as context */
+export interface RetrievedSource {
+  source_id: string;
+  chunk_id: string;
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  entity_name: string;
+  entity_type: string;
+  language: string;
+  signature?: string | null;
+  docstring?: string | null;
+  code_content: string;
+  score: number;
+}
+
+/** Request payload for asking natural language questions about a repository */
+export interface RAGRequest {
+  repository_url: string;
+  question: string;
+  top_k?: number;
+}
+
+/** Response payload containing grounded answer and verified code citations */
+export interface RAGResponse {
+  repository: RepositoryInfo;
+  question: string;
+  answer: string;
+  citations: CodeCitation[];
+  sources: RetrievedSource[];
+  retrieved_chunks: number;
+  status: string;
+}
+
+/**
+ * Ask a natural language question about an indexed repository using grounded RAG.
+ */
+export async function askRepositoryQuestion(
+  repositoryUrl: string,
+  question: string,
+  topK: number = 5
+): Promise<RAGResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/repositories/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      repository_url: repositoryUrl,
+      question: question.trim(),
+      top_k: topK,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to process question.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
 

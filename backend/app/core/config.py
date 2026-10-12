@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     embedding_batch_size: int = 32
     chroma_persist_dir: str = "chroma_db"
 
+    # LLM & RAG (Day 6)
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4o-mini"
+    llm_api_key: str = ""
+    llm_max_output_tokens: int = 1024
+    rag_top_k: int = 5
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

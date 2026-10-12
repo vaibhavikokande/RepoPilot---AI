@@ -11,6 +11,12 @@ from app.code_intelligence import (
 )
 from app.core.config import get_settings
 from app.embeddings import EmbeddingService
+from app.rag import (
+    RAGPipeline,
+    RAGRequest,
+    RAGResponse,
+)
+from app.rag.generator import LLMGenerationError
 from app.schemas.code_analysis import (
     CodeAnalysisRequest,
     CodeAnalysisResponse,
@@ -614,6 +620,122 @@ async def semantic_search_repository(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred during semantic search.",
         ) from exc
+
+
+@router.post(
+    "/ask",
+    response_model=RAGResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Ask questions about repository codebase using grounded RAG",
+    description=(
+        "Retrieves the most relevant code chunks using vector similarity and hybrid search, "
+        "assembles a prompt-injection defended context, synthesizes an answer using an LLM, "
+        "and validates all source citations against actual retrieved code chunks."
+    ),
+)
+async def ask_repository(
+    request: RAGRequest,
+) -> RAGResponse:
+    """Ask a natural language question about an indexed GitHub repository.
+
+    Args:
+        request: RAGRequest containing repository URL, question, and top_k chunks.
+
+    Returns:
+        RAGResponse with grounded answer, verified citations, and source evidence.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Validate non-empty question
+    if not request.question.strip():
+        status_code = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
+        raise HTTPException(
+            status_code=status_code,
+            detail="Question cannot be empty or contain only whitespace.",
+        )
+
+    repo_service = RepositoryService()
+    analyzer = CodeIntelligenceAnalyzer()
+    chunker = CodeChunker()
+    embedding_service = EmbeddingService()
+    vector_store = ChromaVectorStore()
+    pipeline = RAGPipeline()
+
+    try:
+        # Check if vector index exists; if not, clone and index on demand
+        index_exists = vector_store.collection_exists(parsed_repo.url)
+        chunks = None
+        default_branch = None
+
+        if not index_exists:
+            logger.info("Repository %s not indexed in vector store; indexing on demand...", parsed_repo.url)
+            with repo_service.cloned_repository(
+                clone_url=parsed_repo.clone_url,
+                owner=parsed_repo.owner,
+                name=parsed_repo.name,
+            ) as (repo_path, branch):
+                default_branch = branch
+                _, files, _, _, _, _ = analyzer.analyze_repository(repo_path)
+                chunks = chunker.chunk_repository(repo_path=repo_path, code_files=files)
+
+                if chunks:
+                    embeddings = await embedding_service.embed_chunks(chunks)
+                    vector_store.index_chunks(
+                        repo_url=parsed_repo.url,
+                        chunks=chunks,
+                        embeddings=embeddings,
+                        embedding_model=embedding_service.model_name,
+                        dimension=embedding_service.dimension,
+                    )
+
+        repo_info = RepositoryInfo(
+            name=parsed_repo.name,
+            owner=parsed_repo.owner,
+            url=parsed_repo.url,
+            default_branch=default_branch,
+        )
+
+        return await pipeline.ask(
+            repo_url=parsed_repo.url,
+            question=request.question,
+            repo_info=repo_info,
+            top_k=request.top_k,
+            chunks=chunks,
+        )
+
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except LLMGenerationError as exc:
+        logger.error("LLM generation error for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"LLM generation failed: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during RAG question processing: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while processing the question.",
+        ) from exc
+
 
 
 

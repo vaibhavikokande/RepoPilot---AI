@@ -193,11 +193,16 @@ Future RAG Layer [Planned]
 
 
 
-### RAG Pipeline [Planned]
+### RAG Pipeline [Implemented]
 
-- **Purpose**: Retrieve relevant code context for AI queries
-- **Tech**: LangChain/LangGraph, embedding models
-- **Flow**: Query → Embed → Search → Retrieve → Augment → Generate
+- **Purpose**: Answer natural language questions about codebases strictly grounded in retrieved code evidence
+- **Tech**: FastAPI, ChromaDB, httpx, OpenAI `gpt-4o-mini`, deterministic Mock fallback generator
+- **Architecture & Security**:
+  - **Prompt Injection Defense**: All retrieved code chunks are encapsulated in delimited untrusted data blocks. The system prompt commands the model to treat all comments, docstrings, and strings strictly as code data to analyze, never as instructions to follow.
+  - **Context Budget Manager**: Sources are dynamically formatted and capped at ~12,000 characters to prevent token limit overflow.
+  - **Citation Verification**: Every factual statement is required to cite its source inline (`[S1]`, `[S2]`). The pipeline extracts citation tags via regex and validates them strictly against the retrieved sources, filtering out any hallucinated source references.
+  - **Graceful Insufficient-Evidence Handling**: If no relevant code chunks are retrieved or evidence is lacking, the pipeline outputs: `"I couldn't find enough relevant code in the repository to answer this question confidently."`
+- **Flow**: User Question → Hybrid/Vector Retrieval → Context Assembly & Injection Safeguard → LLM Generation → Citation Verification → Grounded Answer with Source References
 
 ### Agent Orchestrator [Planned]
 
