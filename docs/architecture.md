@@ -63,12 +63,14 @@ This document describes the high-level architecture of RepoPilot AI. Components 
 - **Current Features**:
   - Repository URL input with analyze button
   - Feature overview grid
+  - Interactive Code Search UI (lexical, semantic, and hybrid modes)
+  - Interactive "Ask RepoPilot" RAG question-answering with verified source citations
+  - Repository Health Dashboard with letter grade, sub-scores, findings filters, and file quality metrics
   - Responsive dark theme design
 - **Planned Features**:
-  - Analysis results dashboard
   - Real-time streaming output
   - Code diff viewer
-  - Repository health score display
+  - Automated PR reviews
 
 ### Backend API (FastAPI) [Implemented]
 
@@ -76,6 +78,11 @@ This document describes the high-level architecture of RepoPilot AI. Components 
 - **Tech**: FastAPI, Pydantic, Uvicorn
 - **Current Endpoints**:
   - `GET /api/v1/health` — Service health check
+  - `POST /api/v1/repositories/analyze` — Repository ingestion, statistics, and AST code intelligence
+  - `POST /api/v1/repositories/search` — Lexical, AST-metadata, semantic, and hybrid code search
+  - `POST /api/v1/repositories/index` — Embeddings generation and ChromaDB vector indexing
+  - `POST /api/v1/repositories/ask` — RAG-based code understanding with citations
+  - `POST /api/v1/repositories/quality` — Code quality analysis, smell detection, and health scoring
 - **Architecture Patterns**:
   - Application factory (`create_app()`)
   - Versioned API routing
@@ -203,6 +210,41 @@ Future RAG Layer [Planned]
   - **Citation Verification**: Every factual statement is required to cite its source inline (`[S1]`, `[S2]`). The pipeline extracts citation tags via regex and validates them strictly against the retrieved sources, filtering out any hallucinated source references.
   - **Graceful Insufficient-Evidence Handling**: If no relevant code chunks are retrieved or evidence is lacking, the pipeline outputs: `"I couldn't find enough relevant code in the repository to answer this question confidently."`
 - **Flow**: User Question → Hybrid/Vector Retrieval → Context Assembly & Injection Safeguard → LLM Generation → Citation Verification → Grounded Answer with Source References
+
+### Code Quality Analysis Engine & Repository Health Dashboard [Implemented]
+
+- **Purpose**: Provide deterministic, evidence-based code quality diagnostics, cyclomatic complexity calculations, smell detection, and repository health grading.
+- **Tech**: Python AST, Regular Expressions, Pydantic, Next.js / Tailwind CSS.
+- **Components**:
+  - **Metrics Computation (`metrics.py`)**:
+    - Lines of code: total, physical code, comments, and blank lines.
+    - Cyclomatic Complexity: McCabe cyclomatic complexity calculation on Python AST nodes (`If`, `For`, `While`, `ExceptHandler`, `With`, `Assert`, boolean operators `And`/`Or`) and JS/TS branching keywords.
+    - Nesting Depth: Maximum indentation and AST statement block nesting.
+    - Duplicate Code Detection: Rolling token hash windowing (minimum 6 matching normalized lines) across all indexed files.
+  - **Quality Rules Engine (`rules.py`)**:
+    - Evaluates 9 deterministic rules across 5 categories (`maintainability`, `complexity`, `documentation`, `reliability`, `duplication`):
+      - `FUNCTION_TOO_LONG`: >50 lines (medium), >100 lines (high)
+      - `FILE_TOO_LARGE`: >400 lines (medium), >800 lines (high)
+      - `EXCESSIVE_NESTING`: >3 levels (medium), >4 levels (high)
+      - `HIGH_CYCLOMATIC_COMPLEXITY`: >10 (high), >15 (critical)
+      - `TOO_MANY_PARAMETERS`: >5 parameters (medium)
+      - `MISSING_DOCSTRING`: Public functions/classes lacking docstrings (low)
+      - `BROAD_EXCEPTION`: Catching broad `Exception`/`BaseException` or empty catch blocks (medium)
+      - `POTENTIALLY_UNUSED_IMPORT`: Top-level imports not referenced in file body (low)
+      - `DUPLICATE_CODE_BLOCK`: Repeated blocks of 6+ identical non-trivial lines (medium)
+  - **Scoring & Health Grading (`scoring.py`)**:
+    - Calculates 4 weighted sub-scores normalized per KLOC (1,000 lines of code):
+      - Maintainability (40% weight)
+      - Complexity (25% weight)
+      - Documentation (20% weight)
+      - Reliability (15% weight)
+    - Computes composite 0–100 overall score and standard letter grades: A ($\ge 90$), B ($\ge 80$), C ($\ge 70$), D ($\ge 60$), F ($< 60$).
+    - Computes individual file-level health scores for targeted refactoring.
+  - **Interactive Health Dashboard (`RepositoryHealthDashboard.tsx`)**:
+    - Visual health score card with animated progress bars for each dimension.
+    - Metrics overview grid displaying LOC, comments, complexity, and duplicate counts.
+    - Searchable and filterable findings list (by severity and category) with actionable suggestions.
+    - File quality breakdown table with sorting and direct source line inspection.
 
 ### Agent Orchestrator [Planned]
 

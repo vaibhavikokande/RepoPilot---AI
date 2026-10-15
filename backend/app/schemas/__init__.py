@@ -1,5 +1,12 @@
-"""Pydantic request and response schemas for RepoPilot AI."""
-
+from app.schemas.code_quality import (
+    CodeQualityRequest,
+    CodeQualityResponse,
+    FindingCategory,
+    FindingSeverity,
+    HealthScoreBreakdown,
+    QualityFinding,
+    RepositoryQualityMetrics,
+)
 from app.schemas.rag import (
     CodeCitation,
     RAGRequest,
@@ -33,6 +40,8 @@ __all__ = [
     "CodeAnalysisRequest",
     "CodeAnalysisResponse",
     "CodeCitation",
+    "CodeQualityRequest",
+    "CodeQualityResponse",
     "CodeSearchRequest",
     "CodeSearchResponse",
     "CodeSearchResultItem",

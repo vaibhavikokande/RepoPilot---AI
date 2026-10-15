@@ -486,4 +486,124 @@ export async function askRepositoryQuestion(
   return response.json();
 }
 
+/** Finding severity level */
+export type FindingSeverity = "critical" | "error" | "warning" | "info";
+
+/** Finding category */
+export type FindingCategory =
+  | "complexity"
+  | "size"
+  | "maintainability"
+  | "documentation"
+  | "error_handling"
+  | "style"
+  | "duplication";
+
+/** Quality finding model */
+export interface QualityFinding {
+  id: string;
+  rule_id: string;
+  rule_name: string;
+  category: FindingCategory;
+  severity: FindingSeverity;
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  entity_name?: string | null;
+  entity_type?: string | null;
+  message: string;
+  suggestion: string;
+  metric_value?: number | null;
+  threshold?: number | null;
+}
+
+/** File quality summary */
+export interface FileQualitySummary {
+  file_path: string;
+  language: string;
+  total_lines: number;
+  code_lines: number;
+  comment_lines: number;
+  blank_lines: number;
+  functions_count: number;
+  classes_count: number;
+  average_complexity: number;
+  max_complexity: number;
+  findings_count: number;
+  health_score: number;
+  letter_grade: string;
+}
+
+/** Repository quality metrics */
+export interface RepositoryQualityMetrics {
+  total_lines: number;
+  code_lines: number;
+  comment_lines: number;
+  blank_lines: number;
+  total_files_analyzed: number;
+  files_with_issues: number;
+  total_functions: number;
+  total_classes: number;
+  average_function_length: number;
+  average_cyclomatic_complexity: number;
+  max_cyclomatic_complexity: number;
+  docstring_coverage_percentage: number;
+  duplicate_blocks_count: number;
+}
+
+/** Health scores breakdown */
+export interface HealthScoreBreakdown {
+  maintainability_score: number;
+  complexity_score: number;
+  documentation_score: number;
+  reliability_score: number;
+  overall_score: number;
+  letter_grade: string;
+}
+
+/** Full code quality response */
+export interface CodeQualityResponse {
+  repository: RepositoryInfo;
+  health: HealthScoreBreakdown;
+  metrics: RepositoryQualityMetrics;
+  findings: QualityFinding[];
+  file_summaries: FileQualitySummary[];
+  category_breakdown: Record<string, number>;
+  severity_breakdown: Record<string, number>;
+  parsing_errors: FileParseError[];
+  status: string;
+}
+
+/**
+ * Perform comprehensive code quality analysis and repository health scoring.
+ */
+export async function analyzeCodeQuality(
+  repositoryUrl: string
+): Promise<CodeQualityResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/repositories/quality`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      repository_url: repositoryUrl,
+    }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Failed to analyze code quality.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
 

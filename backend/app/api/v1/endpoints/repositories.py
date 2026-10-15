@@ -9,6 +9,11 @@ from app.code_intelligence import (
     CodeSearchEngine,
     HybridCodeSearchService,
 )
+from app.code_quality import CodeQualityAnalyzer
+from app.code_quality.models import (
+    CodeQualityRequest,
+    CodeQualityResponse,
+)
 from app.core.config import get_settings
 from app.embeddings import EmbeddingService
 from app.rag import (
@@ -735,6 +740,80 @@ async def ask_repository(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while processing the question.",
         ) from exc
+
+
+@router.post(
+    "/quality",
+    response_model=CodeQualityResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Analyze repository code quality and calculate health metrics",
+    description=(
+        "Clones the repository into an ephemeral workspace, runs static quality rules "
+        "(size, cyclomatic complexity, nesting depth, documentation coverage, broad exceptions, "
+        "unused imports, and code duplication), and calculates repository health scores and letter grades."
+    ),
+)
+async def analyze_repository_quality(
+    request: CodeQualityRequest,
+) -> CodeQualityResponse:
+    """Perform code quality analysis and repository health scoring.
+
+    Args:
+        request: Request containing the public repository URL.
+
+    Returns:
+        CodeQualityResponse with metrics, findings, file summaries, and health grade.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for quality analysis: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    repo_service = RepositoryService()
+    quality_analyzer = CodeQualityAnalyzer()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return quality_analyzer.analyze_repository(
+                repo_path=repo_path,
+                repo_info=repo_info,
+            )
+
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during code quality analysis: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while analyzing code quality.",
+        ) from exc
+
 
 
 

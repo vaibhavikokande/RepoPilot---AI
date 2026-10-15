@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1, Day 2, Day 3, Day 4, Day 5 & Day 6)
+### Implemented (Day 1, Day 2, Day 3, Day 4, Day 5, Day 6 & Day 7)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -60,10 +60,12 @@ To create an AI software engineer that can:
 - ✅ **Prompt Injection Defenses & Untrusted Code Boundaries**
 - ✅ **Multi-Provider LLM Engine** (OpenAI `gpt-4o-mini` with deterministic `MockLLMGenerator` fallback)
 - ✅ **Interactive "Ask RepoPilot" UI** with suggested questions, citation badge links, and code inspector
+- ✅ **Code Quality Analysis Engine** (cyclomatic complexity, nesting depth, function/file size thresholds, parameter count, docstring coverage, broad exceptions, unused imports, duplicate code block detection)
+- ✅ **Repository Health Dashboard & Scoring** (composite 0–100 score, maintainability/complexity/documentation/reliability sub-scores, letter grades A–F, severity & category filtering, actionable suggestions)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (75 unit and integration tests passing in <1s)
+- ✅ Automated test suite (95 unit and integration tests passing in <1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
@@ -73,7 +75,6 @@ To create an AI software engineer that can:
 - 🧪 Automated test generation
 - 🐛 Bug detection and fix suggestions
 - 📝 Documentation generation
-- 🏥 Repository health scoring
 - 🔌 MCP integration
 
 ## 🏗️ Planned AI Architecture
@@ -241,6 +242,31 @@ RepoPilot AI integrates deep vector representations to understand code meaning b
    - Combines lexical keyword scores with semantic vector cosine similarity using Reciprocal Rank Fusion:
      $$RRF(d) = \sum_{m \in \{lexical, semantic\}} \frac{w_m}{60 + rank_m(d)}$$
    - Seamlessly returns results in `semantic`, `hybrid`, or `lexical` search modes.
+
+## 🏥 Code Quality Analysis & Repository Health Dashboard
+
+RepoPilot AI statically inspects codebase structure and computes transparent, actionable health metrics:
+
+1. **Static Quality Rules Engine (`backend/app/code_quality/`)**:
+   - **Structural Complexity**: Measures McCabe cyclomatic complexity (branch points) for Python AST and JavaScript/TypeScript regex tokens. Flags methods and functions exceeding threshold limits.
+   - **Nesting Depth**: Evaluates AST statement depth (loops, conditionals, exception handlers) and nested brace indentation (>3/4 depth).
+   - **Size Violations**: Identifies oversized functions (>50/100 lines) and bloated source files (>400/800 lines).
+   - **Parameter Overload**: Flags methods taking excessive parameters (>5 arguments).
+   - **Documentation Coverage**: Verifies presence of docstrings on public classes, methods, and functions.
+   - **Reliability Smells**: Detects broad exception clauses (`except Exception: pass`, empty `catch {}`), and potentially unused imported modules.
+   - **Duplication Detection**: Employs rolling hash windowing over normalized non-comment tokens to identify duplicate or near-duplicate code blocks (6+ lines).
+2. **Deterministic Repository Health Scoring**:
+   - Computes KLOC-normalized penalties across 4 key dimensions:
+     - **Maintainability** (40% weight): Function/file sizes, nesting depth, and duplicate code blocks.
+     - **Complexity** (25% weight): Average and peak cyclomatic complexity.
+     - **Documentation** (20% weight): Docstring coverage on public API symbols.
+     - **Reliability** (15% weight): Broad exception handling and unused imports.
+   - Generates overall composite score (0–100) and letter grades: `A` ($\ge 90$), `B` ($\ge 80$), `C` ($\ge 70$), `D` ($\ge 60$), `F` ($< 60$).
+3. **Interactive Repository Health Dashboard**:
+   - Health score grade badge with color indicators and animated progress bars.
+   - Overview metrics: total files, lines of code, comment lines, complexity, and duplicate blocks.
+   - Severity filtering (`critical`, `high`, `medium`, `low`, `info`) and category filtering (`maintainability`, `complexity`, `documentation`, `reliability`, `duplication`).
+   - Actionable remediation advice and exact source location links.
 
 ## 🔌 API
 
@@ -577,12 +603,100 @@ Ask natural language questions about the codebase and receive grounded answers w
 }
 ```
 
+### 5. Code Quality & Health Analysis (`POST /api/v1/repositories/quality`)
+
+Analyze codebase health, detect static code smells, compute cyclomatic complexity, and calculate maintainability scores:
+
+```bash
+POST /api/v1/repositories/quality
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "max_files": 200
+}
+```
+
+**Example Response:**
+```json
+{
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "master"
+  },
+  "overall_health_score": 92.5,
+  "health_grade": "A",
+  "score_breakdown": {
+    "maintainability_score": 94.0,
+    "complexity_score": 90.0,
+    "documentation_score": 88.0,
+    "reliability_score": 98.0
+  },
+  "metrics": {
+    "total_files_analyzed": 12,
+    "total_lines_of_code": 1420,
+    "total_comment_lines": 310,
+    "total_blank_lines": 250,
+    "average_file_length": 118.3,
+    "average_function_length": 18.2,
+    "average_cyclomatic_complexity": 2.4,
+    "max_cyclomatic_complexity": 7,
+    "docstring_coverage_percentage": 82.5,
+    "duplicate_block_count": 0
+  },
+  "findings_summary": {
+    "critical": 0,
+    "high": 1,
+    "medium": 3,
+    "low": 4,
+    "info": 2,
+    "total": 10
+  },
+  "findings": [
+    {
+      "id": "finding_1_high",
+      "rule_id": "HIGH_CYCLOMATIC_COMPLEXITY",
+      "severity": "high",
+      "category": "complexity",
+      "title": "High cyclomatic complexity in 'process_records'",
+      "description": "Function 'process_records' has a cyclomatic complexity of 12 (threshold is 10).",
+      "file_path": "backend/app/services/processor.py",
+      "start_line": 45,
+      "end_line": 95,
+      "entity_name": "process_records",
+      "entity_type": "function",
+      "metric_name": "cyclomatic_complexity",
+      "metric_value": 12.0,
+      "threshold_value": 10.0,
+      "suggestion": "Refactor complex branching into smaller helper functions or lookup tables."
+    }
+  ],
+  "file_summaries": [
+    {
+      "file_path": "backend/app/services/processor.py",
+      "language": "python",
+      "lines_total": 140,
+      "lines_code": 110,
+      "complexity_average": 4.2,
+      "complexity_max": 12,
+      "findings_count": 2,
+      "health_score": 84.0
+    }
+  ],
+  "status": "success"
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (75 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, and RAG pipeline)
+# Backend tests (95 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, and code quality analysis)
 cd backend
 pytest tests/ -v
 ```
@@ -597,10 +711,11 @@ pytest tests/ -v
 | **Phase 4** | Code Chunking & Intelligent Search — Lexical, AST metadata & explanations | ✅ Complete |
 | **Phase 5** | Vector Embeddings & Semantic Search — ChromaDB, ONNX all-MiniLM-L6-v2 & RRF Hybrid Retrieval | ✅ Complete |
 | **Phase 6** | RAG-Based Code Understanding — Evidence grounding, prompt injection defenses & verified citations | ✅ Complete |
-| **Phase 7** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 8** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
-| **Phase 9** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 10** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 7** | Code Quality & Health Dashboard — AST metrics, complexity, code smells, duplication & health scoring | ✅ Complete |
+| **Phase 8** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 9** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
+| **Phase 10** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 11** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 
 

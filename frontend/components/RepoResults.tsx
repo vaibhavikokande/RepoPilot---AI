@@ -10,6 +10,7 @@ import {
 import CodeIntelligenceView from "./CodeIntelligenceView";
 import CodeSearchView from "./CodeSearchView";
 import AskRepoPilot from "./AskRepoPilot";
+import RepositoryHealthDashboard from "./RepositoryHealthDashboard";
 
 
 interface RepoResultsProps {
@@ -263,6 +264,9 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
 
       {/* Ask RepoPilot (RAG Code Understanding) */}
       <AskRepoPilot repositoryUrl={repository.url} />
+
+      {/* Repository Health & Code Quality Dashboard */}
+      <RepositoryHealthDashboard repositoryUrl={repository.url} />
 
       {/* Code Search Section */}
       <CodeSearchView repositoryUrl={repository.url} />
