@@ -15,6 +15,11 @@ from app.code_quality.models import (
     CodeQualityResponse,
 )
 from app.core.config import get_settings
+from app.security_analysis import (
+    SecurityAnalysisRequest,
+    SecurityAnalysisResponse,
+    SecurityAnalyzer,
+)
 from app.embeddings import EmbeddingService
 from app.rag import (
     RAGPipeline,
@@ -813,6 +818,81 @@ async def analyze_repository_quality(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while analyzing code quality.",
         ) from exc
+
+
+@router.post(
+    "/analyze-security",
+    response_model=SecurityAnalysisResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Perform static security analysis and risk detection",
+    description=(
+        "Clones the repository into an ephemeral workspace and statically inspects supported source files "
+        "for hardcoded credentials, dynamic code execution (eval/exec), insecure subprocess calls, "
+        "SQL injection indicators, unsafe deserialization (pickle), weak cryptography, and disabled TLS."
+    ),
+)
+async def analyze_repository_security(
+    request: SecurityAnalysisRequest,
+) -> SecurityAnalysisResponse:
+    """Perform static security analysis on a public GitHub repository.
+
+    Args:
+        request: Request containing the public repository URL and optional LLM summary flag.
+
+    Returns:
+        SecurityAnalysisResponse containing security findings, severity breakdown, and coverage metrics.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for security analysis: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    repo_service = RepositoryService()
+    security_analyzer = SecurityAnalyzer()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return await security_analyzer.analyze_repository(
+                repo_path=repo_path,
+                repo_info=repo_info,
+                explain_with_llm=request.explain_with_llm,
+            )
+
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during security analysis: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while analyzing security risks.",
+        ) from exc
+
 
 
 

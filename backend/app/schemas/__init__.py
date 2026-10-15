@@ -36,7 +36,19 @@ from app.schemas.repository import (
     RepositoryStatistics,
 )
 
+from app.schemas.security import (
+    AnalysisStats,
+    SecurityAnalysisRequest,
+    SecurityAnalysisResponse,
+    SecurityCategory,
+    SecurityConfidence,
+    SecurityFinding,
+    SecuritySeverity,
+    SecuritySummary,
+)
+
 __all__ = [
+    "AnalysisStats",
     "CodeAnalysisRequest",
     "CodeAnalysisResponse",
     "CodeCitation",
@@ -56,6 +68,13 @@ __all__ = [
     "RepositoryInfo",
     "RepositoryStatistics",
     "RetrievedSource",
+    "SecurityAnalysisRequest",
+    "SecurityAnalysisResponse",
+    "SecurityCategory",
+    "SecurityConfidence",
+    "SecurityFinding",
+    "SecuritySeverity",
+    "SecuritySummary",
     "SemanticSearchRequest",
     "SemanticSearchResponse",
     "SemanticSearchResultItem",

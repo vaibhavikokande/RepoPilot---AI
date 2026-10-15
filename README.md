@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1, Day 2, Day 3, Day 4, Day 5, Day 6 & Day 7)
+### Implemented (Day 1, Day 2, Day 3, Day 4, Day 5, Day 6, Day 7 & Day 8)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -62,10 +62,12 @@ To create an AI software engineer that can:
 - ✅ **Interactive "Ask RepoPilot" UI** with suggested questions, citation badge links, and code inspector
 - ✅ **Code Quality Analysis Engine** (cyclomatic complexity, nesting depth, function/file size thresholds, parameter count, docstring coverage, broad exceptions, unused imports, duplicate code block detection)
 - ✅ **Repository Health Dashboard & Scoring** (composite 0–100 score, maintainability/complexity/documentation/reliability sub-scores, letter grades A–F, severity & category filtering, actionable suggestions)
+- ✅ **Static Security Analysis Engine (SAST)** (hardcoded credentials, dynamic execution eval/exec, insecure subprocess/shell injection, SQL injection indicators, unsafe deserialization pickle/yaml, weak cryptography, disabled TLS verification)
+- ✅ **Security Risk Dashboard & Privacy Protections** (complete secret redaction, confidence & severity classification, CWE mappings, human-review guardrails, optional AI executive summary)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (95 unit and integration tests passing in <1s)
+- ✅ Automated test suite (124 unit and integration tests passing in <1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
@@ -267,6 +269,31 @@ RepoPilot AI statically inspects codebase structure and computes transparent, ac
    - Overview metrics: total files, lines of code, comment lines, complexity, and duplicate blocks.
    - Severity filtering (`critical`, `high`, `medium`, `low`, `info`) and category filtering (`maintainability`, `complexity`, `documentation`, `reliability`, `duplication`).
    - Actionable remediation advice and exact source location links.
+
+## 🛡️ Static Security Analysis & Risk Detection Engine
+
+RepoPilot AI incorporates a lightweight Static Application Security Testing (SAST) engine designed to detect common security anti-patterns, hardcoded credentials, and injection risks without executing untrusted code:
+
+1. **Modular Security Rules & CWE Mappings (`backend/app/security_analysis/`)**:
+   - **Hardcoded Credentials (`CWE-798`)**: Identifies suspicious assignments to credential-like identifiers (`password`, `api_key`, `secret`, `token`, etc.) while ignoring common dummy placeholders (`CHANGE_ME`, `TODO`, `dummy`, `test`). Classifies recognized live token formats (e.g. `sk-`, `ghp_`, `AKIA`) as `critical` severity.
+   - **Dangerous Dynamic Execution (`CWE-95`)**: Detects Python `eval()`, `exec()`, and JavaScript `eval()`, distinguishing dynamic expressions from static constants.
+   - **Insecure Subprocess Execution (`CWE-78`)**: Flags `shell=True` and `os.system()` with dynamic arguments while recognizing safe argument-list invocations (`subprocess.run(["cmd", arg])`).
+   - **SQL Injection Indicators (`CWE-89`)**: Detects string-built SQL queries (using f-strings, `%`, or `.format()`) passed to database `execute()` functions, while passing safe parameterized queries.
+   - **Unsafe Deserialization (`CWE-502`)**: Detects untrusted deserialization via Python `pickle.loads()`, `marshal`, and unsafe `yaml.load()` missing `SafeLoader`.
+   - **Weak Cryptographic Algorithms (`CWE-328` / `CWE-327`)**: Detects legacy hashing functions (`MD5`, `SHA-1`) while permitting non-security checksums that explicitly declare `usedforsecurity=False`.
+   - **Insecure TLS Verification (`CWE-295`)**: Flags explicit certificate bypasses such as `verify=False` in HTTP clients and `ssl._create_unverified_context()`.
+   - **Broad Exception Handling (`CWE-391`)**: Flags broad error silencing (`except Exception: pass`) inside security-sensitive authentication/authorization functions.
+2. **Strict Privacy & Secret-Redaction Safeguards**:
+   - **Zero Secret Exposure**: Suspected secrets are redacted before presentation (`sk-***[REDACTED length 32]`). Raw secrets are **never** logged, stored in finding summaries, or forwarded to external LLMs.
+   - **Safe Sandbox Execution**: The engine is purely static. Repository code is never executed, dependencies are never installed, and no exploitation attempts are made.
+3. **Severity & Confidence Classifications**:
+   - **Severity**: `Critical` (immediate exploitable pattern / live key), `High` (dangerous primitives with dynamic input), `Medium` (static shell / weak algorithms), `Low` / `Informational` (maintainability and defense-in-depth).
+   - **Confidence**: `High` (syntactically unambiguous AST nodes), `Medium` (pattern matches requiring data-flow context), `Low` (heuristics).
+4. **Interactive Security Dashboard**:
+   - Overview metrics: Scanned files, findings breakdown, and severity badges.
+   - Severity & category filter pills, CWE links, and search bar.
+   - Actionable remediation advice and exact source file locations (`file_path:line`).
+   - Clear human review guardrail indicating static findings require developer confirmation.
 
 ## 🔌 API
 
@@ -691,12 +718,97 @@ Request payload:
 }
 ```
 
+### 6. Security Analysis & Risk Detection (`POST /api/v1/repositories/analyze-security`)
+
+Statically inspect repository code for security anti-patterns, hardcoded credentials, and injection risks:
+
+```bash
+POST /api/v1/repositories/analyze-security
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "explain_with_llm": false
+}
+```
+
+**Example Response:**
+```json
+{
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "master"
+  },
+  "analysis": {
+    "files_discovered": 40,
+    "files_analyzed": 38,
+    "files_skipped": 2
+  },
+  "summary": {
+    "critical": 0,
+    "high": 2,
+    "medium": 3,
+    "low": 1,
+    "informational": 0,
+    "total": 6
+  },
+  "findings": [
+    {
+      "finding_id": "sec_python_dangerous_eval_a1b2c3d4",
+      "rule_id": "PYTHON_DANGEROUS_EVAL",
+      "title": "Dynamic Code Execution (eval)",
+      "description": "The code calls 'eval()' to dynamically execute code. Evaluating untrusted input leads to Remote Code Execution (RCE).",
+      "severity": "high",
+      "confidence": "high",
+      "file_path": "app/utils/parser.py",
+      "start_line": 24,
+      "end_line": 24,
+      "entity_name": "parse_user_expression",
+      "evidence_summary": "Call to eval() executes dynamic code expressions.",
+      "remediation": "Avoid dynamic execution. Use ast.literal_eval() for safely parsing Python literals, or an explicit dispatch table.",
+      "cwe_id": "CWE-95",
+      "category": "code_execution"
+    },
+    {
+      "finding_id": "sec_python_hardcoded_credential_e5f6g7h8",
+      "rule_id": "PYTHON_HARDCODED_CREDENTIAL",
+      "title": "Hardcoded Credential in 'api_key'",
+      "description": "Variable 'api_key' is assigned a hardcoded string literal that appears to be a sensitive credential.",
+      "severity": "high",
+      "confidence": "medium",
+      "file_path": "app/config.py",
+      "start_line": 12,
+      "end_line": 12,
+      "entity_name": null,
+      "evidence_summary": "Variable 'api_key' assigned a hardcoded literal string (32 characters).",
+      "remediation": "Store secrets in environment variables or use a secrets manager. Never commit API keys directly to source control.",
+      "cwe_id": "CWE-798",
+      "category": "credentials"
+    }
+  ],
+  "category_summary": {
+    "code_execution": 1,
+    "credentials": 1,
+    "command_injection": 1,
+    "sql_injection": 1,
+    "deserialization": 1,
+    "cryptography": 1
+  },
+  "status": "completed",
+  "llm_summary": "Static security scan for 'Hello-World' identified 6 findings requiring review. Primary areas of concern include: code execution (1), credentials (1), command injection (1)."
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (95 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, and code quality analysis)
+# Backend tests (124 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, and security analysis)
 cd backend
 pytest tests/ -v
 ```
@@ -712,10 +824,11 @@ pytest tests/ -v
 | **Phase 5** | Vector Embeddings & Semantic Search — ChromaDB, ONNX all-MiniLM-L6-v2 & RRF Hybrid Retrieval | ✅ Complete |
 | **Phase 6** | RAG-Based Code Understanding — Evidence grounding, prompt injection defenses & verified citations | ✅ Complete |
 | **Phase 7** | Code Quality & Health Dashboard — AST metrics, complexity, code smells, duplication & health scoring | ✅ Complete |
-| **Phase 8** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 9** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
-| **Phase 10** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 11** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 8** | Security Analysis & Risk Detection — SAST rules, secret redaction, CWE mapping & security dashboard | ✅ Complete |
+| **Phase 9** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 10** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
+| **Phase 11** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 12** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 
 

@@ -66,6 +66,7 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - Interactive Code Search UI (lexical, semantic, and hybrid modes)
   - Interactive "Ask RepoPilot" RAG question-answering with verified source citations
   - Repository Health Dashboard with letter grade, sub-scores, findings filters, and file quality metrics
+  - Static Security Analysis Dashboard with severity badges, category pills, CWE mapping, and remediation guidance
   - Responsive dark theme design
 - **Planned Features**:
   - Real-time streaming output
@@ -83,6 +84,7 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - `POST /api/v1/repositories/index` — Embeddings generation and ChromaDB vector indexing
   - `POST /api/v1/repositories/ask` — RAG-based code understanding with citations
   - `POST /api/v1/repositories/quality` — Code quality analysis, smell detection, and health scoring
+  - `POST /api/v1/repositories/analyze-security` — Static security analysis, risk detection, and CWE reporting
 - **Architecture Patterns**:
   - Application factory (`create_app()`)
   - Versioned API routing
@@ -245,6 +247,35 @@ Future RAG Layer [Planned]
     - Metrics overview grid displaying LOC, comments, complexity, and duplicate counts.
     - Searchable and filterable findings list (by severity and category) with actionable suggestions.
     - File quality breakdown table with sorting and direct source line inspection.
+
+### Security Analysis Engine & Risk Detection Dashboard [Implemented]
+
+- **Purpose**: Statically inspect repository source code for common security vulnerabilities, hardcoded credentials, and injection risks without code execution.
+- **Tech**: Python AST, Regular Expressions, Pydantic, Next.js / Tailwind CSS, optional OpenAI LLM explanation layer.
+- **Components**:
+  - **Modular SAST Engine (`backend/app/security_analysis/`)**:
+    - **AST & Token Analysis**: Operates strictly on parsed ASTs (Python) and comment-stripped token lines (JS/TS). Ignores comments and docstrings to prevent avoidable false positives.
+    - **Credential Detection & Redaction**: Detects sensitive assignments to credential-like variable names (`password`, `api_key`, `secret`, `access_token`, etc.) while filtering obvious dummy placeholders. Automatically redacts all discovered secrets (`[REDACTED]`) before generating findings or logs.
+  - **Implemented Detection Rules & CWE Mappings**:
+    - `PYTHON_HARDCODED_CREDENTIAL` / `JS_HARDCODED_CREDENTIAL` (`CWE-798`): Hardcoded tokens, API keys, and passwords.
+    - `PYTHON_DANGEROUS_EVAL` / `PYTHON_DANGEROUS_EXEC` / `JS_DANGEROUS_EVAL` (`CWE-95`): Dynamic evaluation of untrusted code expressions.
+    - `PYTHON_INSECURE_SUBPROCESS` (`CWE-78`): Subprocess execution with `shell=True` and dynamic arguments or `os.system()` invocations.
+    - `PYTHON_SQL_INJECTION` (`CWE-89`): Dynamically concatenated or formatted SQL queries passed to database execution methods.
+    - `PYTHON_UNSAFE_DESERIALIZATION` (`CWE-502`): Arbitrary object deserialization via `pickle.loads()`, `marshal`, or unsafe `yaml.load()`.
+    - `PYTHON_WEAK_CRYPTO` / `JS_WEAK_CRYPTO` (`CWE-328` / `CWE-327`): Usage of collision-vulnerable hash algorithms (`MD5`, `SHA-1`) or broken ciphers.
+    - `PYTHON_INSECURE_TLS` / `JS_INSECURE_TLS` (`CWE-295`): Disabled TLS/SSL certificate verification (`verify=False`, `ssl._create_unverified_context()`).
+    - `PYTHON_BROAD_EXCEPTION_SECURITY` (`CWE-391`): Silencing errors via broad exceptions (`except Exception: pass`) inside authentication or cryptographic functions.
+  - **Severity & Confidence Scoring**:
+    - **Severity**: `Critical`, `High`, `Medium`, `Low`, `Informational`.
+    - **Confidence**: `High`, `Medium`, `Low`.
+  - **Privacy & Safety Safeguards**:
+    - Purely static analysis; never executes repository scripts or installs dependencies.
+    - Zero secret exposure: Suspected secret values are never included in API responses or sent to LLMs.
+    - Context-budgeted, optional AI summary that treats repository content strictly as untrusted data.
+  - **Interactive Security Dashboard (`SecurityAnalysisDashboard.tsx`)**:
+    - Severity breakdown cards (Critical, High, Medium, Low, Informational).
+    - Severity and category filtering pills, full-text search, and expandable remediation cards.
+    - Prominent human-review guardrail clarifying that findings represent static review items.
 
 ### Agent Orchestrator [Planned]
 

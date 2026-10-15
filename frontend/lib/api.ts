@@ -606,4 +606,88 @@ export async function analyzeCodeQuality(
   return response.json();
 }
 
+/** Security finding interface */
+export interface SecurityFinding {
+  finding_id: string;
+  rule_id: string;
+  title: string;
+  description: string;
+  severity: "critical" | "high" | "medium" | "low" | "informational";
+  confidence: "high" | "medium" | "low";
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  entity_name?: string | null;
+  evidence_summary: string;
+  remediation: string;
+  cwe_id?: string | null;
+  category: string;
+}
+
+/** Security findings summary by severity */
+export interface SecuritySummary {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  informational: number;
+  total: number;
+}
+
+/** Security analysis file coverage statistics */
+export interface SecurityAnalysisStats {
+  files_discovered: number;
+  files_analyzed: number;
+  files_skipped: number;
+}
+
+/** Full security analysis response */
+export interface SecurityAnalysisResponse {
+  repository: RepositoryInfo;
+  analysis: SecurityAnalysisStats;
+  summary: SecuritySummary;
+  findings: SecurityFinding[];
+  category_summary: Record<string, number>;
+  status: string;
+  llm_summary?: string | null;
+}
+
+/**
+ * Perform static security analysis and risk detection on a repository.
+ */
+export async function analyzeSecurity(
+  repositoryUrl: string,
+  explainWithLLM: boolean = false
+): Promise<SecurityAnalysisResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/repositories/analyze-security`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        repository_url: repositoryUrl,
+        explain_with_llm: explainWithLLM,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to analyze repository security.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+
 

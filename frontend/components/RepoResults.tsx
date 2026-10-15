@@ -11,6 +11,7 @@ import CodeIntelligenceView from "./CodeIntelligenceView";
 import CodeSearchView from "./CodeSearchView";
 import AskRepoPilot from "./AskRepoPilot";
 import RepositoryHealthDashboard from "./RepositoryHealthDashboard";
+import SecurityAnalysisDashboard from "./SecurityAnalysisDashboard";
 
 
 interface RepoResultsProps {
@@ -267,6 +268,9 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
 
       {/* Repository Health & Code Quality Dashboard */}
       <RepositoryHealthDashboard repositoryUrl={repository.url} />
+
+      {/* Security Analysis & Risk Detection Dashboard */}
+      <SecurityAnalysisDashboard repositoryUrl={repository.url} />
 
       {/* Code Search Section */}
       <CodeSearchView repositoryUrl={repository.url} />
