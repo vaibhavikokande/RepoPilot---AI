@@ -67,6 +67,7 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - Interactive "Ask RepoPilot" RAG question-answering with verified source citations
   - Repository Health Dashboard with letter grade, sub-scores, findings filters, and file quality metrics
   - Static Security Analysis Dashboard with severity badges, category pills, CWE mapping, and remediation guidance
+  - Interactive Unit Test Generator UI with AST entity pickers, test descriptions, syntax verification badges, copy, and `.py` download
   - Responsive dark theme design
 - **Planned Features**:
   - Real-time streaming output
@@ -85,6 +86,7 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - `POST /api/v1/repositories/ask` — RAG-based code understanding with citations
   - `POST /api/v1/repositories/quality` — Code quality analysis, smell detection, and health scoring
   - `POST /api/v1/repositories/analyze-security` — Static security analysis, risk detection, and CWE reporting
+  - `POST /api/v1/repositories/generate-tests` — AI-powered unit test generation with AST context and syntax validation
 - **Architecture Patterns**:
   - Application factory (`create_app()`)
   - Versioned API routing
@@ -276,6 +278,35 @@ Future RAG Layer [Planned]
     - Severity breakdown cards (Critical, High, Medium, Low, Informational).
     - Severity and category filtering pills, full-text search, and expandable remediation cards.
     - Prominent human-review guardrail clarifying that findings represent static review items.
+
+### Unit Test Generation Engine & Dashboard [Implemented]
+
+- **Purpose**: Autonomously synthesize grounded `pytest` unit test suites for functions and methods in ingested Python repositories without hallucinating imports, classes, or signatures.
+- **Tech**: Python Standard Library AST, Next.js / TypeScript / Tailwind CSS, Multi-Provider LLM (`OpenAI` with `MockLLMGenerator` deterministic fallback).
+- **Architecture & Pipeline**:
+  - **AST Context Builder (`context_builder.py`)**:
+    - Discovers target functions or class methods using Python's standard library `ast.parse`.
+    - Extracts precise source lines, signatures, and docstrings.
+    - Inspects enclosing class definition (e.g. `__init__`, attributes) for methods.
+    - Collects module-level imports and relative imports for accurate test mocking and namespace resolution.
+    - Enforces safety: validates file paths against workspace root to prevent path traversal; limits context payload to 8,000 characters.
+  - **Prompt Engineering & Grounding (`prompt_builder.py`)**:
+    - Wraps retrieved source code inside strict `<UNTRUSTED_CODE_DATA>` boundaries to neutralize prompt injection attacks.
+    - Directs the LLM to write tests using `pytest` and `unittest.mock` covering happy paths, boundary conditions, edge cases, and error handling.
+    - Demands strict structured JSON output containing `test_framework`, `test_code`, `test_cases`, and `suggested_file_name`.
+  - **Deterministic Fallback Generator**:
+    - When running offline or when LLM API keys are unavailable, generates high-quality syntactic `pytest` test templates directly derived from the target entity's AST signature, parameters, and class context.
+  - **AST Syntax & Structure Validator (`validator.py`)**:
+    - Statically validates generated test code using `ast.parse(test_code)`.
+    - Discovers and counts valid `test_*` functions and class methods.
+    - Returns structured warnings if test cases are missing, while marking `execution_status: "not_run"`.
+    - **Zero Execution Safety Rule**: Generated test code is never executed directly on the host machine.
+  - **Interactive Next.js Dashboard (`TestGenerationView.tsx`)**:
+    - Automatically populates dropdown with Python files and callable entities discovered during AST code intelligence.
+    - Manual fallback inputs allowing custom file and entity specification.
+    - Real-time syntax validity status badge, test function count pill, and safety disclaimers.
+    - Structured test case breakdown displaying test name and purpose.
+    - Monospace test suite code viewer with one-click "Copy Code" and `.py` file download.
 
 ### Agent Orchestrator [Planned]
 

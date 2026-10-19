@@ -20,6 +20,14 @@ from app.security_analysis import (
     SecurityAnalysisResponse,
     SecurityAnalyzer,
 )
+from app.test_generation import (
+    ContextBuilderError,
+    EntityNotFoundError,
+    TestGenerationRequest,
+    TestGenerationResponse,
+    UnitTestGenerator,
+    UnsupportedLanguageError,
+)
 from app.embeddings import EmbeddingService
 from app.rag import (
     RAGPipeline,
@@ -892,6 +900,108 @@ async def analyze_repository_security(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while analyzing security risks.",
         ) from exc
+
+
+@router.post(
+    "/generate-tests",
+    response_model=TestGenerationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate unit tests for a Python function or method",
+    description=(
+        "Clones the repository into an ephemeral workspace, locates the specified function or method, "
+        "retrieves its source code and context, invokes the LLM generator to create pytest unit tests, "
+        "and validates syntax and structure."
+    ),
+)
+async def generate_unit_tests(
+    request: TestGenerationRequest,
+) -> TestGenerationResponse:
+    """Generate pytest unit tests for a specific function or method in a repository.
+
+    Args:
+        request: TestGenerationRequest containing repo URL, file path, and entity name.
+
+    Returns:
+        TestGenerationResponse with generated test code, test cases, and validation output.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for test generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    repo_service = RepositoryService()
+    test_generator = UnitTestGenerator()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return await test_generator.generate_tests(
+                repo_path=repo_path,
+                repo_info=repo_info,
+                file_path=request.file_path,
+                entity_name=request.entity_name,
+                start_line=request.start_line,
+                end_line=request.end_line,
+            )
+
+    except FileNotFoundError as exc:
+        logger.warning("Source file not found for test generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except EntityNotFoundError as exc:
+        logger.warning("Target entity not found for test generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except UnsupportedLanguageError as exc:
+        logger.warning("Unsupported language for test generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except ContextBuilderError as exc:
+        logger.warning("Context building error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during test generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while generating unit tests.",
+        ) from exc
+
 
 
 

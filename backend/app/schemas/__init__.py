@@ -46,6 +46,13 @@ from app.schemas.security import (
     SecuritySeverity,
     SecuritySummary,
 )
+from app.schemas.test_generation import (
+    TestCaseDescription,
+    TestGenerationRequest,
+    TestGenerationResponse,
+    TestTarget,
+    ValidationResult,
+)
 
 __all__ = [
     "AnalysisStats",
@@ -78,6 +85,11 @@ __all__ = [
     "SemanticSearchRequest",
     "SemanticSearchResponse",
     "SemanticSearchResultItem",
+    "TestCaseDescription",
+    "TestGenerationRequest",
+    "TestGenerationResponse",
+    "TestTarget",
+    "ValidationResult",
 ]
 
 

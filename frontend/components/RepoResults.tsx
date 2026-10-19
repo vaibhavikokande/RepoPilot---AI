@@ -12,6 +12,7 @@ import CodeSearchView from "./CodeSearchView";
 import AskRepoPilot from "./AskRepoPilot";
 import RepositoryHealthDashboard from "./RepositoryHealthDashboard";
 import SecurityAnalysisDashboard from "./SecurityAnalysisDashboard";
+import TestGenerationView from "./TestGenerationView";
 
 
 interface RepoResultsProps {
@@ -271,6 +272,12 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
 
       {/* Security Analysis & Risk Detection Dashboard */}
       <SecurityAnalysisDashboard repositoryUrl={repository.url} />
+
+      {/* AI-Powered Unit Test Generation */}
+      <TestGenerationView
+        repositoryUrl={repository.url}
+        codeFiles={codeData?.files}
+      />
 
       {/* Code Search Section */}
       <CodeSearchView repositoryUrl={repository.url} />

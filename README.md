@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1, Day 2, Day 3, Day 4, Day 5, Day 6, Day 7 & Day 8)
+### Implemented (Day 1 – Day 9)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -64,17 +64,21 @@ To create an AI software engineer that can:
 - ✅ **Repository Health Dashboard & Scoring** (composite 0–100 score, maintainability/complexity/documentation/reliability sub-scores, letter grades A–F, severity & category filtering, actionable suggestions)
 - ✅ **Static Security Analysis Engine (SAST)** (hardcoded credentials, dynamic execution eval/exec, insecure subprocess/shell injection, SQL injection indicators, unsafe deserialization pickle/yaml, weak cryptography, disabled TLS verification)
 - ✅ **Security Risk Dashboard & Privacy Protections** (complete secret redaction, confidence & severity classification, CWE mappings, human-review guardrails, optional AI executive summary)
+- ✅ **AI-Powered Unit Test Generation** (`POST /api/v1/repositories/generate-tests`)
+- ✅ **AST Context Extraction** (target signature, docstrings, enclosing classes, imports, helper snippets)
+- ✅ **Pytest Test Suite Synthesis & Strict Grounding** (happy path, boundary conditions, edge cases, error handling, mock dependencies)
+- ✅ **AST Syntax & Structure Validation** (zero hallucinated syntax, test discovery verification, isolated execution markers)
+- ✅ **Interactive Test Generator UI** (file/entity pickers, test descriptions, syntax verification badges, copy & `.py` download)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (124 unit and integration tests passing in <1s)
+- ✅ Automated test suite (144 unit and integration tests passing in <1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
 
 - 📊 Deep AI-powered code analysis
 - 🤖 Multi-agent workflow orchestration (LangGraph)
-- 🧪 Automated test generation
 - 🐛 Bug detection and fix suggestions
 - 📝 Documentation generation
 - 🔌 MCP integration
@@ -803,12 +807,73 @@ Request payload:
 }
 ```
 
+### 7. AI-Powered Unit Test Generation (`POST /api/v1/repositories/generate-tests`)
+
+Extract grounded AST context for a function or method and synthesize a complete `pytest` test suite:
+
+```bash
+POST /api/v1/repositories/generate-tests
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "file_path": "app/services/calculator.py",
+  "entity_name": "divide_numbers"
+}
+```
+
+**Example Response:**
+```json
+{
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "master"
+  },
+  "target": {
+    "file_path": "app/services/calculator.py",
+    "entity_name": "divide_numbers",
+    "entity_type": "function",
+    "start_line": 15,
+    "end_line": 25,
+    "class_name": null,
+    "signature": "def divide_numbers(a: float, b: float) -> float:",
+    "docstring": "Divide two numbers and return the quotient. Raises ZeroDivisionError if b is 0."
+  },
+  "test_framework": "pytest",
+  "test_code": "import pytest\nfrom app.services.calculator import divide_numbers\n\ndef test_divide_numbers_happy_path():\n    assert divide_numbers(10.0, 2.0) == 5.0\n\ndef test_divide_numbers_zero_division():\n    with pytest.raises(ZeroDivisionError):\n        divide_numbers(10.0, 0.0)\n",
+  "test_cases": [
+    {
+      "name": "test_divide_numbers_happy_path",
+      "purpose": "Verify correct quotient for positive floats"
+    },
+    {
+      "name": "test_divide_numbers_zero_division",
+      "purpose": "Verify ZeroDivisionError when denominator is zero"
+    }
+  ],
+  "validation": {
+    "syntax_valid": true,
+    "structure_valid": true,
+    "test_functions_found": 2,
+    "syntax_error": null,
+    "warnings": [],
+    "execution_status": "not_run"
+  },
+  "suggested_file_name": "test_calculator_divide_numbers.py",
+  "status": "completed"
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (124 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, and security analysis)
+# Backend tests (144 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, and test generation)
 cd backend
 pytest tests/ -v
 ```
@@ -825,8 +890,8 @@ pytest tests/ -v
 | **Phase 6** | RAG-Based Code Understanding — Evidence grounding, prompt injection defenses & verified citations | ✅ Complete |
 | **Phase 7** | Code Quality & Health Dashboard — AST metrics, complexity, code smells, duplication & health scoring | ✅ Complete |
 | **Phase 8** | Security Analysis & Risk Detection — SAST rules, secret redaction, CWE mapping & security dashboard | ✅ Complete |
-| **Phase 9** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 10** | Automated Test Generation — AI-powered test suite creation | 🔲 Planned |
+| **Phase 9** | AI-Powered Unit Test Generation — AST context extraction, pytest generation, syntax validation & dashboard | ✅ Complete |
+| **Phase 10** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
 | **Phase 11** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
 | **Phase 12** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 

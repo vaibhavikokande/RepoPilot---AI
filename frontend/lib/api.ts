@@ -689,5 +689,89 @@ export async function analyzeSecurity(
   return response.json();
 }
 
+/** Target entity metadata for test generation */
+export interface TestTarget {
+  file_path: string;
+  entity_name: string;
+  entity_type: string;
+  parent_class?: string | null;
+  start_line: number;
+  end_line: number;
+  signature?: string | null;
+  docstring?: string | null;
+}
+
+/** Description of generated test case */
+export interface TestCaseDescription {
+  name: string;
+  purpose: string;
+}
+
+/** Structural and syntax validation output */
+export interface TestValidationResult {
+  syntax_valid: boolean;
+  structure_valid: boolean;
+  test_functions_found: number;
+  syntax_error?: string | null;
+  warnings: string[];
+  execution_status: string;
+}
+
+/** Test generation request payload */
+export interface TestGenerationRequest {
+  repository_url: string;
+  file_path: string;
+  entity_name: string;
+  start_line?: number | null;
+  end_line?: number | null;
+}
+
+/** Full test generation response */
+export interface TestGenerationResponse {
+  repository: RepositoryInfo;
+  target: TestTarget;
+  framework: string;
+  test_cases: TestCaseDescription[];
+  assumptions: string[];
+  test_code: string;
+  validation: TestValidationResult;
+  file_name: string;
+  status: string;
+}
+
+/**
+ * Generate pytest unit tests for a specific function or method.
+ */
+export async function generateUnitTests(
+  request: TestGenerationRequest
+): Promise<TestGenerationResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/repositories/generate-tests`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to generate unit tests.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+
 
 
