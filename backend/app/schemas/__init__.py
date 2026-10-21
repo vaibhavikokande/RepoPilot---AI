@@ -53,6 +53,16 @@ from app.schemas.test_generation import (
     TestTarget,
     ValidationResult,
 )
+from app.schemas.test_execution import (
+    CoverageReport,
+    FileCoverage,
+    SandboxInfo,
+    SandboxStatus,
+    TestCaseResult,
+    TestRunRequest,
+    TestRunResponse,
+    TestSummary,
+)
 
 __all__ = [
     "AnalysisStats",
@@ -64,6 +74,8 @@ __all__ = [
     "CodeSearchRequest",
     "CodeSearchResponse",
     "CodeSearchResultItem",
+    "CoverageReport",
+    "FileCoverage",
     "FileInfo",
     "FileTreeNode",
     "RAGRequest",
@@ -75,6 +87,8 @@ __all__ = [
     "RepositoryInfo",
     "RepositoryStatistics",
     "RetrievedSource",
+    "SandboxInfo",
+    "SandboxStatus",
     "SecurityAnalysisRequest",
     "SecurityAnalysisResponse",
     "SecurityCategory",
@@ -86,8 +100,12 @@ __all__ = [
     "SemanticSearchResponse",
     "SemanticSearchResultItem",
     "TestCaseDescription",
+    "TestCaseResult",
     "TestGenerationRequest",
     "TestGenerationResponse",
+    "TestRunRequest",
+    "TestRunResponse",
+    "TestSummary",
     "TestTarget",
     "ValidationResult",
 ]

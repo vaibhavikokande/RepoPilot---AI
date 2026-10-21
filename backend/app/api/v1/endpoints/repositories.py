@@ -28,6 +28,16 @@ from app.test_generation import (
     UnitTestGenerator,
     UnsupportedLanguageError,
 )
+from app.test_execution import (
+    RequestValidationError,
+    SandboxStatus,
+    SandboxUnavailableError,
+    TestRunRequest,
+    TestRunResponse,
+    TestRunner,
+    get_sandbox_status,
+    test_run_store,
+)
 from app.embeddings import EmbeddingService
 from app.rag import (
     RAGPipeline,
@@ -1001,6 +1011,132 @@ async def generate_unit_tests(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while generating unit tests.",
         ) from exc
+
+
+@router.get(
+    "/sandbox-status",
+    response_model=SandboxStatus,
+    status_code=status.HTTP_200_OK,
+    summary="Check Docker container sandbox status and diagnostic information",
+    description="Inspect whether the Docker container runtime is available on the host for isolated test execution.",
+)
+def check_sandbox_status() -> SandboxStatus:
+    """Return diagnostic status and security requirements of the container sandbox."""
+    return get_sandbox_status()
+
+
+@router.post(
+    "/run-tests",
+    response_model=TestRunResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Run approved Python pytest tests in an isolated sandbox",
+    description=(
+        "Clones repository, creates an ephemeral disposable workspace, validates the test file, "
+        "and executes pytest inside an isolated container with zero network access and enforced resource limits. "
+        "Parses test outcomes and code coverage metrics."
+    ),
+)
+async def run_tests(
+    request: TestRunRequest,
+) -> TestRunResponse:
+    """Execute approved unit tests in an isolated sandbox with resource and timeout limits.
+
+    Args:
+        request: TestRunRequest containing repository URL, test file, timeout, and coverage flag.
+
+    Returns:
+        TestRunResponse with test results, coverage breakdown, exit code, and logs.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for test execution: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Validate request parameters before cloning
+    try:
+        TestRunner.validate_request_parameters(request)
+    except RequestValidationError as exc:
+        logger.warning("Test run request rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    repo_service = RepositoryService()
+    runner = TestRunner()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return await runner.run_tests(
+                request=request,
+                repo_path=repo_path,
+                repo_info=repo_info,
+            )
+
+    except RequestValidationError as exc:
+        logger.warning("Test run request rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except FileNotFoundError as exc:
+        logger.warning("Test file not found for execution: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during test execution: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while executing unit tests.",
+        ) from exc
+
+
+@router.get(
+    "/test-runs/{run_id}",
+    response_model=TestRunResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get results of an existing test execution run",
+)
+def get_repository_test_run(run_id: str) -> TestRunResponse:
+    """Retrieve test run outcome, summary, coverage, and logs for a given run ID."""
+    run = test_run_store.get_run(run_id)
+    if not run:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Test run with ID '{run_id}' not found.",
+        )
+    return run
+
 
 
 

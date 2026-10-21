@@ -2,8 +2,9 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, repositories
+from app.api.v1.endpoints import health, repositories, test_runs
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(health.router)
 api_v1_router.include_router(repositories.router)
+api_v1_router.include_router(test_runs.router)

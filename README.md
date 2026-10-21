@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1 – Day 9)
+### Implemented (Day 1 – Day 10)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -69,10 +69,16 @@ To create an AI software engineer that can:
 - ✅ **Pytest Test Suite Synthesis & Strict Grounding** (happy path, boundary conditions, edge cases, error handling, mock dependencies)
 - ✅ **AST Syntax & Structure Validation** (zero hallucinated syntax, test discovery verification, isolated execution markers)
 - ✅ **Interactive Test Generator UI** (file/entity pickers, test descriptions, syntax verification badges, copy & `.py` download)
+- ✅ **Safe Test Execution Engine** (`POST /api/v1/repositories/run-tests`, `GET /api/v1/test-runs/{run_id}`)
+- ✅ **Container Sandbox Isolation & Security Safeguards** (Docker `--network none`, `--user 1000:1000`, `--cap-drop=ALL`, `--security-opt=no-new-privileges`, 512MB RAM, 1.0 CPU, 64 PIDs, zero host secrets inheritance)
+- ✅ **Disposable Workspace Staging** (original repository clone remains 100% untouched)
+- ✅ **Statement & Line Coverage Analysis** (`coverage.py` parsing, totals, per-file percentages, missing line numbers)
+- ✅ **Server Sandbox Diagnostics** (`GET /api/v1/repositories/sandbox-status`)
+- ✅ **Interactive Test Execution & Coverage Dashboard** (review-then-run action, test outcome metrics, coverage bar, uncovered lines list, safely truncated console logs)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (144 unit and integration tests passing in <1s)
+- ✅ Automated test suite (173 unit and integration tests passing in <1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
@@ -868,12 +874,110 @@ Request payload:
 }
 ```
 
+### 8. Safe Test Execution & Coverage Analysis (`POST /api/v1/repositories/run-tests`)
+
+Execute approved tests inside an isolated sandbox with resource bounds, network disabled, and code coverage measurement:
+
+```bash
+POST /api/v1/repositories/run-tests
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "test_file": "tests/test_calculator.py",
+  "target_file": "app/services/calculator.py",
+  "coverage": true,
+  "timeout_seconds": 30
+}
+```
+
+**Example Response:**
+```json
+{
+  "run_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "status": "completed",
+  "test_file": "tests/test_calculator.py",
+  "target_file": "app/services/calculator.py",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0
+  },
+  "test_results": [
+    {
+      "name": "test_add_success",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "message": null
+    },
+    {
+      "name": "test_divide_success",
+      "status": "passed",
+      "duration_seconds": 0.0,
+      "message": null
+    }
+  ],
+  "duration_seconds": 0.35,
+  "exit_code": 0,
+  "coverage": {
+    "total_statements": 10,
+    "covered_statements": 8,
+    "missing_statements": 2,
+    "coverage_percent": 80.0,
+    "files": [
+      {
+        "file_path": "app/services/calculator.py",
+        "total_statements": 10,
+        "covered_statements": 8,
+        "missing_statements": 2,
+        "coverage_percent": 80.0,
+        "missing_lines": [5, 6]
+      }
+    ],
+    "is_available": true,
+    "reason": null
+  },
+  "sandbox": {
+    "sandbox_type": "docker",
+    "is_isolated": true,
+    "network_disabled": true,
+    "non_root": true,
+    "resource_limits": {
+      "memory": "512m",
+      "cpus": "1.0",
+      "pids": 64
+    },
+    "runner_image": "python:3.11-slim"
+  },
+  "execution_type": "container",
+  "stdout": "============================= test session starts ==============================\n...",
+  "stderr": "",
+  "error_message": null,
+  "warnings": [],
+  "created_at": "2026-10-21T07:25:00.000000Z"
+}
+```
+
+Retrieve test run results by ID:
+```bash
+GET /api/v1/test-runs/{run_id}
+```
+
+Check Docker container sandbox status & requirements:
+```bash
+GET /api/v1/repositories/sandbox-status
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (144 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, and test generation)
+# Backend tests (173 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, and isolated execution & coverage)
 cd backend
 pytest tests/ -v
 ```
@@ -891,9 +995,10 @@ pytest tests/ -v
 | **Phase 7** | Code Quality & Health Dashboard — AST metrics, complexity, code smells, duplication & health scoring | ✅ Complete |
 | **Phase 8** | Security Analysis & Risk Detection — SAST rules, secret redaction, CWE mapping & security dashboard | ✅ Complete |
 | **Phase 9** | AI-Powered Unit Test Generation — AST context extraction, pytest generation, syntax validation & dashboard | ✅ Complete |
-| **Phase 10** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 11** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 12** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 10** | Safe Test Execution & Coverage Analysis — Isolated container runner, pytest reporting, coverage analysis & test dashboard | ✅ Complete |
+| **Phase 11** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 12** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 13** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 
 

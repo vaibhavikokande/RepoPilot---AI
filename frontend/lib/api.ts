@@ -772,6 +772,156 @@ export async function generateUnitTests(
   return response.json();
 }
 
+/* ========================================================================= */
+/* DAY 10: Safe Test Execution & Coverage Analysis                           */
+/* ========================================================================= */
+
+/** Individual test function execution result */
+export interface TestCaseResult {
+  name: string;
+  status: "passed" | "failed" | "skipped" | "error";
+  duration_seconds: number;
+  message?: string | null;
+}
+
+/** Aggregated test run summary */
+export interface TestSummary {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+  errors: number;
+}
+
+/** Per-file coverage details */
+export interface FileCoverage {
+  file_path: string;
+  total_statements: number;
+  covered_statements: number;
+  missing_statements: number;
+  coverage_percent: number;
+  missing_lines: number[];
+}
+
+/** Overall code coverage report */
+export interface CoverageReport {
+  total_statements: number;
+  covered_statements: number;
+  missing_statements: number;
+  coverage_percent: number;
+  files: FileCoverage[];
+  is_available: boolean;
+  reason?: string | null;
+}
+
+/** Container sandbox runtime configuration */
+export interface SandboxInfo {
+  sandbox_type: string;
+  is_isolated: boolean;
+  network_disabled: boolean;
+  non_root: boolean;
+  resource_limits: Record<string, any>;
+  runner_image?: string | null;
+}
+
+/** Server diagnostic status for container sandbox */
+export interface SandboxStatus {
+  available: boolean;
+  sandbox_type: string;
+  configured: boolean;
+  message: string;
+  requirements: string[];
+}
+
+/** Request payload for running approved tests */
+export interface TestRunRequest {
+  repository_url: string;
+  test_file: string;
+  test_code?: string | null;
+  target_file?: string | null;
+  coverage?: boolean;
+  timeout_seconds?: number;
+  allow_mock?: boolean;
+}
+
+/** Complete test run response */
+export interface TestRunResponse {
+  run_id: string;
+  status: "completed" | "failed" | "timed_out" | "failed_to_start" | "rejected" | "running" | "queued";
+  test_file: string;
+  target_file?: string | null;
+  summary: TestSummary;
+  test_results: TestCaseResult[];
+  duration_seconds: number;
+  exit_code?: number | null;
+  coverage?: CoverageReport | null;
+  sandbox: SandboxInfo;
+  execution_type: string;
+  stdout: string;
+  stderr: string;
+  error_message?: string | null;
+  warnings: string[];
+  created_at: string;
+}
+
+/**
+ * Check Docker container sandbox availability and security requirements on the server.
+ */
+export async function getSandboxStatus(): Promise<SandboxStatus> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/repositories/sandbox-status`);
+  if (!response.ok) {
+    throw new Error(`Failed to check sandbox status: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Execute approved tests inside an isolated sandbox environment.
+ */
+export async function runTests(
+  request: TestRunRequest
+): Promise<TestRunResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/repositories/run-tests`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to run tests.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+/**
+ * Retrieve status and results of an existing test run by run ID.
+ */
+export async function getTestRun(
+  runId: string
+): Promise<TestRunResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/test-runs/${runId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch test run: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+
 
 
 
