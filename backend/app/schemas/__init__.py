@@ -46,6 +46,13 @@ from app.schemas.security import (
     SecuritySeverity,
     SecuritySummary,
 )
+from app.schemas.code_review import (
+    CodeReviewFinding,
+    CodeReviewRequest,
+    CodeReviewResponse,
+    ReviewMetadata,
+    ReviewSummary,
+)
 from app.schemas.test_generation import (
     TestCaseDescription,
     TestGenerationRequest,
@@ -71,6 +78,9 @@ __all__ = [
     "CodeCitation",
     "CodeQualityRequest",
     "CodeQualityResponse",
+    "CodeReviewFinding",
+    "CodeReviewRequest",
+    "CodeReviewResponse",
     "CodeSearchRequest",
     "CodeSearchResponse",
     "CodeSearchResultItem",
@@ -87,6 +97,8 @@ __all__ = [
     "RepositoryInfo",
     "RepositoryStatistics",
     "RetrievedSource",
+    "ReviewMetadata",
+    "ReviewSummary",
     "SandboxInfo",
     "SandboxStatus",
     "SecurityAnalysisRequest",

@@ -921,6 +921,116 @@ export async function getTestRun(
   return response.json();
 }
 
+/** Severity level for code review findings */
+export type ReviewSeverity = "critical" | "high" | "medium" | "low" | "info";
+
+/** Category classification for code review findings */
+export type ReviewCategory =
+  | "correctness"
+  | "security"
+  | "performance"
+  | "maintainability"
+  | "readability"
+  | "testing";
+
+/** Review focus scope */
+export type ReviewFocus = "all" | ReviewCategory;
+
+/** An individual grounded code review finding */
+export interface CodeReviewFinding {
+  finding_id: string;
+  title: string;
+  category: ReviewCategory;
+  severity: ReviewSeverity;
+  confidence: "high" | "medium" | "low";
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  entity_name?: string | null;
+  problem: string;
+  evidence: string;
+  recommendation: string;
+  suggested_change?: string | null;
+  source: "static_analysis" | "ai_review";
+  is_verified: boolean;
+}
+
+/** Aggregated review metrics and counts */
+export interface ReviewSummary {
+  total_findings: number;
+  critical_count: number;
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  info_count: number;
+  category_counts: Record<string, number>;
+  static_count: number;
+  ai_count: number;
+}
+
+/** Operational metadata about the review run */
+export interface ReviewMetadata {
+  target_file: string;
+  target_entity?: string | null;
+  total_lines: number;
+  review_focus: string;
+  model: string;
+  execution_time_seconds: number;
+  created_at: string;
+}
+
+/** Request payload for requesting an AI-powered code review */
+export interface CodeReviewRequest {
+  repository_url: string;
+  file_path: string;
+  target_entity?: string | null;
+  review_focus?: ReviewFocus;
+  user_instructions?: string | null;
+}
+
+/** Full response payload containing review findings, summary, and metadata */
+export interface CodeReviewResponse {
+  review_id: string;
+  summary: ReviewSummary;
+  findings: CodeReviewFinding[];
+  metadata: ReviewMetadata;
+  review_notes?: string | null;
+}
+
+/**
+ * Execute AI-powered and static code review on a selected repository file.
+ */
+export async function reviewCode(
+  request: CodeReviewRequest
+): Promise<CodeReviewResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/repositories/review-code`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to perform code review.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+
 
 
 

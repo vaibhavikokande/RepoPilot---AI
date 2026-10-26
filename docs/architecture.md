@@ -349,6 +349,40 @@ Future RAG Layer [Planned]
     - Statement coverage progress bar with per-file missing lines breakdown.
     - Monospace runner console output viewer with path and secret sanitization.
 
+### AI-Powered Code Review Engine & Dashboard [Implemented]
+
+- **Purpose**: Conduct automated, evidence-grounded code reviews of repository source files or specific entities (functions, methods, classes), categorizing issues across correctness, security, performance, maintainability, readability, and testing, while providing actionable, read-only improvement suggestions.
+- **Tech**: Python Standard Library AST, Next.js / TypeScript / Tailwind CSS, Multi-Provider LLM (`OpenAI` with `MockLLMGenerator` deterministic fallback), Static Quality & Security Analyzers.
+- **Architecture & Pipeline**:
+  - **Evidence Collector (`collector.py`)**:
+    - Safely resolves source file paths against repository boundaries, strictly rejecting path traversal (`..`) and absolute paths.
+    - Targets specific functions or classes if specified, calculating exact line bounds.
+    - Extracts numbered source code lines (` 15 | def foo():`) bounded by safety caps (600 lines, 24,000 characters).
+    - Runs deterministic baseline checks from the Code Quality and Security Analysis engines, labeling findings with `source: "static_analysis"`.
+  - **Prompt Hardening & Injection Defenses (`prompt_builder.py`)**:
+    - Wraps untrusted source code and developer instructions inside strict `<UNTRUSTED_CODE_DATA>` XML-like delimiters.
+    - Instructs the reviewer to never execute or treat the code content as instructions.
+    - Enforces strict structured JSON schema output containing category, severity, confidence, start/end lines, problem description, verbatim code evidence, actionable recommendation, and optional suggested code changes.
+  - **Grounding Validator & Secret Redaction (`grounding.py`)**:
+    - Enforces line number validation: clamps out-of-range line indices and verifies line existence against actual source line counts.
+    - Recovers line numbers by substring-searching verbatim evidence snippets in actual source lines if the LLM reported approximate bounds.
+    - Flags findings where code evidence cannot be confirmed as `is_verified: False`.
+    - Automatically sanitizes API tokens, AWS keys, GitHub credentials, and password strings (`[REDACTED_API_KEY]`, `[REDACTED_GITHUB_TOKEN]`).
+  - **Review Orchestrator (`reviewer.py`)**:
+    - Coordinates context collection, LLM synthesis, JSON parsing, grounding validation, and deduplication.
+    - Merges deterministic static findings with AI-generated semantic findings into a unified, sorted findings list.
+    - Computes aggregated summary metrics (critical, high, medium, low, info counts, category breakdown, static vs. AI counts).
+    - Features a deterministic `MockLLMGenerator` fallback to guarantee reliable, offline execution without API keys.
+  - **Read-Only Code Suggestions**:
+    - Generates concrete, side-by-side suggested code fixes without modifying target files or executing patches on repository code.
+  - **Interactive Next.js Review Dashboard (`CodeReviewView.tsx`)**:
+    - File and entity pickers populated from AST code intelligence, with manual path override options.
+    - Focus scope selector (`all`, `correctness`, `security`, `performance`, `maintainability`, `readability`, `testing`).
+    - Optional developer guidance input.
+    - Summary metrics bar with severity counts, static vs. AI breakdown, execution duration, and model metadata.
+    - Multi-dimensional filtering: severity buttons, category pills, source toggles, and live search.
+    - Expandable finding cards featuring verified line badges, code evidence viewers, actionable recommendations, and one-click copy suggested improvements.
+
 ### Agent Orchestrator [Planned]
 
 - **Purpose**: Coordinate specialized AI agents using graph-based workflows

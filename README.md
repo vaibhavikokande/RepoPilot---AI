@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1 – Day 10)
+### Implemented (Day 1 – Day 11)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -75,10 +75,14 @@ To create an AI software engineer that can:
 - ✅ **Statement & Line Coverage Analysis** (`coverage.py` parsing, totals, per-file percentages, missing line numbers)
 - ✅ **Server Sandbox Diagnostics** (`GET /api/v1/repositories/sandbox-status`)
 - ✅ **Interactive Test Execution & Coverage Dashboard** (review-then-run action, test outcome metrics, coverage bar, uncovered lines list, safely truncated console logs)
+- ✅ **AI-Powered Code Review Engine** (`POST /api/v1/repositories/review-code`)
+- ✅ **Deterministic Static & AI Finding Separation** (`source: static_analysis` vs `source: ai_review`)
+- ✅ **Strict Grounding Validator & Secret Redaction** (line bounds clamp, evidence snippet location matching, token & credential sanitization)
+- ✅ **Interactive Code Review Dashboard** (file/entity pickers, review focus modes, severity & category filtering, verified line markers, code evidence inspector, one-click copy read-only suggested improvements)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (173 unit and integration tests passing in <1s)
+- ✅ Automated test suite (194 unit and integration tests passing in ~1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
@@ -304,6 +308,28 @@ RepoPilot AI incorporates a lightweight Static Application Security Testing (SAS
    - Severity & category filter pills, CWE links, and search bar.
    - Actionable remediation advice and exact source file locations (`file_path:line`).
    - Clear human review guardrail indicating static findings require developer confirmation.
+
+## 🧐 AI-Powered Code Review & Improvement Engine
+
+RepoPilot AI integrates an evidence-grounded code review system that analyzes selected files or individual functions/classes and produces actionable software engineering findings:
+
+1. **Evidence Collection & Anti-Traversal Scoping (`backend/app/code_review/collector.py`)**:
+   - Safely resolves target source file paths within workspace boundaries, strictly rejecting traversal sequences (`..`) and absolute paths.
+   - Computes AST boundaries for targeted classes or functions.
+   - Extracts numbered source code lines (` 15 | def foo():`) bounded by safety caps (600 lines, 24,000 characters).
+   - Concurrently executes deterministic code quality and security checks, attributing baseline static issues with `source: "static_analysis"`.
+2. **Prompt Injection Hardening (`backend/app/code_review/prompt_builder.py`)**:
+   - Encloses source code within `<UNTRUSTED_CODE_DATA>` XML-like blocks, instructing the reviewer to treat code strictly as passive input.
+   - Enforces a rigorous JSON schema with required fields: `title`, `category`, `severity`, `confidence`, `start_line`, `end_line`, `problem`, `evidence`, `recommendation`, and `suggested_change`.
+3. **Strict Grounding Validator & Secret Redaction (`backend/app/code_review/grounding.py`)**:
+   - Clamps hallucinated or out-of-bounds line numbers against real source lines.
+   - Searches verbatim code evidence against actual source lines to recover accurate start/end lines if the LLM approximated bounds.
+   - Marks findings as unverified (`is_verified: False`) if evidence snippets cannot be matched.
+   - Automatically sanitizes API tokens, AWS keys, GitHub credentials, and password strings (`[REDACTED_API_KEY]`, `[REDACTED_GITHUB_TOKEN]`).
+4. **Deterministic Mock Fallback (`backend/app/code_review/reviewer.py`)**:
+   - Features an offline heuristic reviewer that triggers when API keys are absent or external LLM services fail, ensuring reliable, offline operation for CI and test environments.
+5. **Read-Only Suggested Code Changes**:
+   - Displays clear, side-by-side suggested fixes with one-click clipboard copying without modifying repository source files or attempting automated commits.
 
 ## 🔌 API
 
@@ -972,12 +998,98 @@ Check Docker container sandbox status & requirements:
 GET /api/v1/repositories/sandbox-status
 ```
 
+### 9. AI-Powered Code Review (`POST /api/v1/repositories/review-code`)
+
+Review a specific file or function for correctness, security, performance, maintainability, readability, and testing:
+
+```bash
+POST /api/v1/repositories/review-code
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "file_path": "app/services/calculator.py",
+  "target_entity": "divide_numbers",
+  "review_focus": "all",
+  "user_instructions": "Focus on error handling and boundary conditions."
+}
+```
+
+**Example Response:**
+```json
+{
+  "review_id": "cr_b6f70a7b4582",
+  "summary": {
+    "total_findings": 2,
+    "critical_count": 0,
+    "high_count": 1,
+    "medium_count": 1,
+    "low_count": 0,
+    "info_count": 0,
+    "category_counts": {
+      "correctness": 1,
+      "maintainability": 1
+    },
+    "static_count": 1,
+    "ai_count": 1
+  },
+  "findings": [
+    {
+      "finding_id": "cr_ai_1",
+      "title": "Unhandled ZeroDivisionError in Float Division",
+      "category": "correctness",
+      "severity": "high",
+      "confidence": "high",
+      "file_path": "app/services/calculator.py",
+      "start_line": 15,
+      "end_line": 20,
+      "entity_name": "divide_numbers",
+      "problem": "Function performs float division without checking if denominator is zero, leading to unhandled ZeroDivisionError.",
+      "evidence": "return a / b",
+      "recommendation": "Check if b == 0 before dividing and raise ValueError with a descriptive message.",
+      "suggested_change": "if b == 0:\n    raise ValueError('Denominator cannot be zero.')\nreturn a / b",
+      "source": "ai_review",
+      "is_verified": true
+    },
+    {
+      "finding_id": "cr_static_qual_1",
+      "title": "Missing Documentation",
+      "category": "maintainability",
+      "severity": "medium",
+      "confidence": "high",
+      "file_path": "app/services/calculator.py",
+      "start_line": 14,
+      "end_line": 22,
+      "entity_name": "divide_numbers",
+      "problem": "Public function 'divide_numbers' is missing a docstring.",
+      "evidence": "def divide_numbers(a: float, b: float) -> float:",
+      "recommendation": "Add a docstring explaining parameters, return value, and exceptions.",
+      "suggested_change": null,
+      "source": "static_analysis",
+      "is_verified": true
+    }
+  ],
+  "metadata": {
+    "target_file": "app/services/calculator.py",
+    "target_entity": "divide_numbers",
+    "total_lines": 25,
+    "review_focus": "all",
+    "model": "gpt-4o-mini",
+    "execution_time_seconds": 0.42,
+    "created_at": "2026-10-26T11:30:00Z"
+  },
+  "review_notes": "Analyzed app/services/calculator.py focusing on all."
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (173 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, and isolated execution & coverage)
+# Backend tests (194 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, isolated execution & coverage, and AI code review)
 cd backend
 pytest tests/ -v
 ```
@@ -996,9 +1108,10 @@ pytest tests/ -v
 | **Phase 8** | Security Analysis & Risk Detection — SAST rules, secret redaction, CWE mapping & security dashboard | ✅ Complete |
 | **Phase 9** | AI-Powered Unit Test Generation — AST context extraction, pytest generation, syntax validation & dashboard | ✅ Complete |
 | **Phase 10** | Safe Test Execution & Coverage Analysis — Isolated container runner, pytest reporting, coverage analysis & test dashboard | ✅ Complete |
-| **Phase 11** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 12** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 13** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 11** | AI-Powered Code Review & Recommendations — Evidence collection, prompt hardening, grounding validation, read-only improvements & review dashboard | ✅ Complete |
+| **Phase 12** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 13** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 14** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 
 

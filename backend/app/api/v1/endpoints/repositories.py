@@ -14,6 +14,14 @@ from app.code_quality.models import (
     CodeQualityRequest,
     CodeQualityResponse,
 )
+from app.code_review import (
+    CodeReviewError,
+    CodeReviewRequest,
+    CodeReviewResponse,
+    CodeReviewer,
+    ReviewTargetNotFoundError,
+    ReviewValidationError,
+)
 from app.core.config import get_settings
 from app.security_analysis import (
     SecurityAnalysisRequest,
@@ -1136,6 +1144,99 @@ def get_repository_test_run(run_id: str) -> TestRunResponse:
             detail=f"Test run with ID '{run_id}' not found.",
         )
     return run
+
+
+@router.post(
+    "/review-code",
+    response_model=CodeReviewResponse,
+    status_code=status.HTTP_200_OK,
+    summary="AI-powered code review and improvement recommendations",
+    description=(
+        "Clones repository, extracts target source lines and AST entities, evaluates deterministic "
+        "quality and security checks, and synthesizes grounded, actionable code review recommendations."
+    ),
+)
+async def review_code(
+    request: CodeReviewRequest,
+) -> CodeReviewResponse:
+    """Perform grounded AI code review on a selected repository source file or entity.
+
+    Args:
+        request: CodeReviewRequest with repository URL, file path, entity, and focus options.
+
+    Returns:
+        CodeReviewResponse with verified findings, severity breakdown, and suggestions.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for code review: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Pre-validate file path anti-traversal before cloning
+    raw_file = request.file_path.strip()
+    if not raw_file or ".." in raw_file or raw_file.startswith("/") or raw_file.startswith("\\"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file_path: Path traversal or absolute paths are prohibited.",
+        )
+
+    repo_service = RepositoryService()
+    reviewer = CodeReviewer()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return await reviewer.review_code(
+                repo_path=repo_path,
+                repo_info=repo_info,
+                request=request,
+            )
+
+    except ReviewValidationError as exc:
+        logger.warning("Code review request validation error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except ReviewTargetNotFoundError as exc:
+        logger.warning("Target not found for code review: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during code review: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while reviewing code.",
+        ) from exc
 
 
 
