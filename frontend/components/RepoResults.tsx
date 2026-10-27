@@ -14,6 +14,7 @@ import RepositoryHealthDashboard from "./RepositoryHealthDashboard";
 import SecurityAnalysisDashboard from "./SecurityAnalysisDashboard";
 import TestGenerationView from "./TestGenerationView";
 import CodeReviewView from "./CodeReviewView";
+import DebugAssistantView from "./DebugAssistantView";
 
 
 interface RepoResultsProps {
@@ -282,6 +283,12 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
 
       {/* AI-Powered Code Review & Improvement Recommendations */}
       <CodeReviewView
+        repositoryUrl={repository.url}
+        codeFiles={codeData?.files}
+      />
+
+      {/* AI-Powered Debugging Assistant */}
+      <DebugAssistantView
         repositoryUrl={repository.url}
         codeFiles={codeData?.files}
       />

@@ -1030,8 +1030,105 @@ export async function reviewCode(
   return response.json();
 }
 
+/** A single frame extracted from an error stack trace */
+export interface StackFrame {
+  file_path?: string | null;
+  line_number?: number | null;
+  function_name?: string | null;
+  code_context?: string | null;
+  is_application_code: boolean;
+}
 
+/** Structured extraction from an error message or stack trace */
+export interface ParsedError {
+  error_type?: string | null;
+  error_message: string;
+  language?: string | null;
+  frames: StackFrame[];
+  file_paths: string[];
+  raw_trace: string;
+}
 
+/** A relevant source code snippet retrieved from repository */
+export interface SourceEvidence {
+  file_path: string;
+  start_line: number;
+  end_line: number;
+  code_snippet: string;
+  entity_name?: string | null;
+  relevance: string;
+}
 
+/** A ranked hypothesis explaining a possible cause */
+export interface PossibleCause {
+  rank: number;
+  title: string;
+  explanation: string;
+  confidence: "high" | "medium" | "low";
+  supporting_evidence: string[];
+}
 
+/** Request payload for debugging assistant */
+export interface DebugRequest {
+  repository_url: string;
+  error_message: string;
+  reproduction_steps?: string | null;
+  expected_behavior?: string | null;
+  file_path?: string | null;
+  language?: string | null;
+}
+
+/** Structured debugging assistant response */
+export interface DebugResponse {
+  debug_id: string;
+  repository: RepositoryInfo;
+  error_type?: string | null;
+  error_summary: string;
+  root_cause: string;
+  confidence: "high" | "medium" | "low";
+  confidence_note: string;
+  evidence: SourceEvidence[];
+  related_files: string[];
+  possible_causes: PossibleCause[];
+  recommended_steps: string[];
+  suggested_fix?: string | null;
+  missing_information: string[];
+  limitations: string[];
+  parsed_error: ParsedError;
+  status: string;
+  warnings: string[];
+}
+
+/**
+ * Submit an error message or stack trace for AI-powered root cause analysis and debugging.
+ */
+export async function debugError(
+  request: DebugRequest
+): Promise<DebugResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/repositories/debug`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to analyze error.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
 

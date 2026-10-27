@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1 – Day 11)
+### Implemented (Day 1 – Day 12)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -79,10 +79,14 @@ To create an AI software engineer that can:
 - ✅ **Deterministic Static & AI Finding Separation** (`source: static_analysis` vs `source: ai_review`)
 - ✅ **Strict Grounding Validator & Secret Redaction** (line bounds clamp, evidence snippet location matching, token & credential sanitization)
 - ✅ **Interactive Code Review Dashboard** (file/entity pickers, review focus modes, severity & category filtering, verified line markers, code evidence inspector, one-click copy read-only suggested improvements)
+- ✅ **AI Debugging Assistant Engine** (`POST /api/v1/repositories/debug`)
+- ✅ **Stack Trace Parsing & Source Context Locator** (Python & JS/TS trace parsing, frame resolution, AST entity context)
+- ✅ **Ranked Hypotheses & Calibrated Confidence** (proven facts vs likely causes vs hypotheses, explicit confidence disclaimer)
+- ✅ **Interactive Debugging Workspace** (trace input, reproduction steps, expected behavior, code evidence inspector, suggested fix copy, frame explorer)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (194 unit and integration tests passing in ~1s)
+- ✅ Automated test suite (217 unit and integration tests passing in ~1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
@@ -330,6 +334,31 @@ RepoPilot AI integrates an evidence-grounded code review system that analyzes se
    - Features an offline heuristic reviewer that triggers when API keys are absent or external LLM services fail, ensuring reliable, offline operation for CI and test environments.
 5. **Read-Only Suggested Code Changes**:
    - Displays clear, side-by-side suggested fixes with one-click clipboard copying without modifying repository source files or attempting automated commits.
+
+## 🩺 AI Debugging Assistant Engine
+
+RepoPilot AI incorporates an evidence-grounded debugging assistant that analyzes error messages and stack traces against real repository source files:
+
+1. **Stack Trace & Error Parsing (`backend/app/debug_assistant/error_parser.py`)**:
+   - Extracts structured error information from Python tracebacks, JavaScript/Node.js stack traces, and unstructured logs.
+   - Identifies exception types, error messages, stack frames, line numbers, function names, and file paths.
+   - Distinguishes application source frames from third-party vendor or standard library frames.
+   - Enforces a 15,000-character safety limit and treats all error inputs strictly as untrusted data.
+2. **Repository Context Location & Anti-Traversal Scoping (`backend/app/debug_assistant/context_locator.py`)**:
+   - Matches referenced stack frame files against the repository workspace, supporting relative paths, absolute container suffixes, and Windows separators.
+   - Strictly enforces path traversal prevention (`..` and directory escaping).
+   - Extracts surrounding source code context with 15-line window padding or AST enclosing entity boundaries.
+   - Explicitly identifies and reports missing files or external modules not present in the repository.
+3. **Calibrated Confidence & Grounding Validator (`backend/app/debug_assistant/validator.py`)**:
+   - Categorizes causes into ranked hypotheses with confidence levels (`high`, `medium`, `low`).
+   - Automatically downgrades confidence if repository source code for the failure line could not be retrieved.
+   - Includes mandatory confidence disclaimer clarifying that static analysis does not guarantee runtime behavior.
+   - Sanitizes sensitive tokens, passwords, and private keys (`[REDACTED_API_KEY]`, `[REDACTED_GITHUB_TOKEN]`).
+4. **Deterministic Mock & Offline Fallback (`backend/app/debug_assistant/assistant.py`)**:
+   - Generates structured, deterministic diagnoses based on innermost stack frames and retrieved source lines when external LLM APIs are offline or unconfigured.
+5. **Read-Only Suggested Fixes & Practical Next Steps**:
+   - Provides concrete code fix snippets without automatically altering repository files or running tests on target code.
+   - Formulates step-by-step reproduction and verification instructions.
 
 ## 🔌 API
 
@@ -1084,12 +1113,99 @@ Request payload:
 }
 ```
 
+### 10. AI-Powered Debugging Assistant (`POST /api/v1/repositories/debug`)
+
+Submit an error message or stack trace to locate relevant repository source files, diagnose root causes, and receive actionable debugging guidance:
+
+```bash
+POST /api/v1/repositories/debug
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "error_message": "Traceback (most recent call last):\n  File \"app/services/calculator.py\", line 5, in divide\n    return a / b\nZeroDivisionError: float division by zero",
+  "reproduction_steps": "Call divide(10.0, 0.0)",
+  "expected_behavior": "Should return 0.0 or raise a clear ValueError"
+}
+```
+
+**Example Response:**
+```json
+{
+  "debug_id": "dbg_3a8f10c49e21",
+  "repository": {
+    "name": "Hello-World",
+    "owner": "octocat",
+    "url": "https://github.com/octocat/Hello-World",
+    "default_branch": "main"
+  },
+  "error_type": "ZeroDivisionError",
+  "error_summary": "A ZeroDivisionError was raised during execution: float division by zero",
+  "root_cause": "The failure appears to originate at app/services/calculator.py at line 5 in function 'divide'. The application attempted float division without checking if denominator 'b' was 0.0.",
+  "confidence": "high",
+  "confidence_note": "Confidence represents the assistant's assessment based on static analysis of available code and stack trace evidence, not a guarantee.",
+  "evidence": [
+    {
+      "file_path": "app/services/calculator.py",
+      "start_line": 1,
+      "end_line": 10,
+      "code_snippet": "   1 | def add(a: int, b: int) -> int:\n   2 |     return a + b\n   3 | \n   4 | def divide(a: float, b: float) -> float:\n   5 |     return a / b",
+      "entity_name": "divide",
+      "relevance": "Execution point at line 5 in function 'divide'"
+    }
+  ],
+  "related_files": ["app/services/calculator.py"],
+  "possible_causes": [
+    {
+      "rank": 1,
+      "title": "Unhandled ZeroDivisionError condition",
+      "explanation": "Execution reached app/services/calculator.py line 5 where division by zero occurred without validation.",
+      "confidence": "high",
+      "supporting_evidence": ["app/services/calculator.py:5"]
+    }
+  ],
+  "recommended_steps": [
+    "1. Inspect app/services/calculator.py around line 5 to verify variable values at runtime.",
+    "2. Add input validation or defensive boundary checks before executing the division operation.",
+    "3. Add a unit test specifically reproducing the condition that produces 'float division by zero'."
+  ],
+  "suggested_fix": "# Defensive check before division:\nif b == 0:\n    raise ValueError('Divisor cannot be zero.')\nreturn a / b",
+  "missing_information": [
+    "Runtime variable values at the moment the exception occurred"
+  ],
+  "limitations": [
+    "Diagnosis is based on static inspection of repository source files and the submitted stack trace.",
+    "Runtime memory state was not directly observed."
+  ],
+  "parsed_error": {
+    "error_type": "ZeroDivisionError",
+    "error_message": "float division by zero",
+    "language": "python",
+    "frames": [
+      {
+        "file_path": "app/services/calculator.py",
+        "line_number": 5,
+        "function_name": "divide",
+        "code_context": "return a / b",
+        "is_application_code": true
+      }
+    ],
+    "file_paths": ["app/services/calculator.py"],
+    "raw_trace": "..."
+  },
+  "status": "completed",
+  "warnings": []
+}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (194 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, isolated execution & coverage, and AI code review)
+# Backend tests (217 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, isolated execution & coverage, code review, and AI debugging assistant)
 cd backend
 pytest tests/ -v
 ```
@@ -1109,9 +1225,10 @@ pytest tests/ -v
 | **Phase 9** | AI-Powered Unit Test Generation — AST context extraction, pytest generation, syntax validation & dashboard | ✅ Complete |
 | **Phase 10** | Safe Test Execution & Coverage Analysis — Isolated container runner, pytest reporting, coverage analysis & test dashboard | ✅ Complete |
 | **Phase 11** | AI-Powered Code Review & Recommendations — Evidence collection, prompt hardening, grounding validation, read-only improvements & review dashboard | ✅ Complete |
-| **Phase 12** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 13** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 14** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 12** | AI Debugging Assistant — Stack trace parsing, source context location, ranked root causes, debugging steps & dashboard | ✅ Complete |
+| **Phase 13** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 14** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 15** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 
 

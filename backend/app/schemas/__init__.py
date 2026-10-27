@@ -70,6 +70,14 @@ from app.schemas.test_execution import (
     TestRunResponse,
     TestSummary,
 )
+from app.schemas.debug import (
+    DebugRequest,
+    DebugResponse,
+    ParsedError,
+    PossibleCause,
+    SourceEvidence,
+    StackFrame,
+)
 
 __all__ = [
     "AnalysisStats",
@@ -85,9 +93,13 @@ __all__ = [
     "CodeSearchResponse",
     "CodeSearchResultItem",
     "CoverageReport",
+    "DebugRequest",
+    "DebugResponse",
     "FileCoverage",
     "FileInfo",
     "FileTreeNode",
+    "ParsedError",
+    "PossibleCause",
     "RAGRequest",
     "RAGResponse",
     "RepositoryAnalyzeRequest",
@@ -111,6 +123,8 @@ __all__ = [
     "SemanticSearchRequest",
     "SemanticSearchResponse",
     "SemanticSearchResultItem",
+    "SourceEvidence",
+    "StackFrame",
     "TestCaseDescription",
     "TestCaseResult",
     "TestGenerationRequest",

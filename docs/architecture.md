@@ -383,6 +383,45 @@ Future RAG Layer [Planned]
     - Multi-dimensional filtering: severity buttons, category pills, source toggles, and live search.
     - Expandable finding cards featuring verified line badges, code evidence viewers, actionable recommendations, and one-click copy suggested improvements.
 
+### AI Debugging Assistant Engine & Dashboard [Implemented]
+
+- **Purpose**: Analyze error messages and stack traces using repository source code, identify innermost failure frames, locate relevant code context, formulate ranked root cause hypotheses, and provide practical debugging steps and read-only fix recommendations.
+- **Tech**: Python Regular Expressions, AST Parsing, Next.js / TypeScript / Tailwind CSS, Multi-Provider LLM (`OpenAI` with `MockLLMGenerator` deterministic fallback).
+- **Architecture & Pipeline**:
+  - **Error Parser (`error_parser.py`)**:
+    - Robust parsing across Python tracebacks, JavaScript/Node.js stack traces, and raw log messages.
+    - Extracts exception type, message, stack frames, line numbers, function names, and file paths.
+    - Classifies stack frames as application code vs. standard library/vendor dependencies to prioritize relevant lines.
+    - Imposes a strict 15,000-character safety limit and treats all error content as untrusted data.
+  - **Context Locator (`context_locator.py`)**:
+    - Resolves raw stack trace paths against repository boundaries, handling relative paths, container prefixes, and Windows separators.
+    - Strictly prevents path traversal attacks (`..` and directory escaping).
+    - Extracts context windows (15 lines padding or enclosing function/class via AST parsing).
+    - Explicitly reports missing or external source files not found in the repository.
+  - **Prompt Hardening & Injection Defenses (`prompt_builder.py`)**:
+    - Encloses untrusted error inputs and code snippets within `<UNTRUSTED_ERROR_INPUT>`, `<UNTRUSTED_USER_CONTEXT>`, and `<UNTRUSTED_CODE_DATA>` XML-like blocks.
+    - Enforces strict structured JSON schema output containing error summary, root cause, ranked causes, debugging steps, and optional suggested fix.
+  - **Grounding Validator & Secret Redaction (`validator.py`)**:
+    - Calibrates confidence: automatically downgrades confidence if repository source code for the failure line could not be retrieved.
+    - Enforces mandatory confidence disclaimer note.
+    - Filters related files against known repository files.
+    - Automatically redacts API tokens, AWS keys, GitHub credentials, and passwords (`[REDACTED_API_KEY]`, `[REDACTED_GITHUB_TOKEN]`).
+  - **Debug Orchestrator (`assistant.py`)**:
+    - Coordinates parsing, context location, LLM synthesis, JSON parsing, validation, and assembly.
+    - Features a deterministic fallback engine generating high-quality diagnoses derived from innermost frames and source lines for reliable offline operation.
+  - **Read-Only Code Fix Recommendations**:
+    - Proposes clean, minimal fix snippets without automatically applying patches, executing scripts, or modifying repository code.
+  - **Interactive Next.js Debugging Dashboard (`DebugAssistantView.tsx`)**:
+    - Stack trace textarea with character counter.
+    - Optional reproduction steps, expected behavior, file focus, and language dropdowns.
+    - Error summary card with error type pill, confidence badge, and disclaimer note.
+    - Prominent primary root cause card.
+    - Ranked possible causes with likelihood badges and evidence references.
+    - Repository code evidence viewer with line numbers and relevance notes.
+    - Actionable step-by-step debugging checklist.
+    - Read-only suggested code fix preview with one-click copy button.
+    - Collapsible stack frames inspector detailing application vs. vendor frames.
+
 ### Agent Orchestrator [Planned]
 
 - **Purpose**: Coordinate specialized AI agents using graph-based workflows

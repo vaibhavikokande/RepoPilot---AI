@@ -22,6 +22,13 @@ from app.code_review import (
     ReviewTargetNotFoundError,
     ReviewValidationError,
 )
+from app.debug_assistant import (
+    DebugAssistant,
+    DebugRequest,
+    DebugResponse,
+    DebugSourceNotFoundError,
+    DebugValidationError,
+)
 from app.core.config import get_settings
 from app.security_analysis import (
     SecurityAnalysisRequest,
@@ -1237,6 +1244,114 @@ async def review_code(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while reviewing code.",
         ) from exc
+
+
+@router.post(
+    "/debug",
+    response_model=DebugResponse,
+    status_code=status.HTTP_200_OK,
+    summary="AI-powered error analysis and debugging assistant",
+    description=(
+        "Parses submitted error messages or stack traces, locates relevant source code in the cloned "
+        "repository workspace, and provides structured root cause analysis with practical debugging steps."
+    ),
+)
+async def debug_error(
+    request: DebugRequest,
+) -> DebugResponse:
+    """Analyze an error message or stack trace using repository source code.
+
+    Args:
+        request: DebugRequest with repository URL, error message, and optional reproduction context.
+
+    Returns:
+        DebugResponse with root cause, source evidence, ranked causes, and suggested fixes.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for debugging: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Pre-validate error message
+    clean_error = request.error_message.strip()
+    if not clean_error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="error_message cannot be empty.",
+        )
+    if len(clean_error) > 15_000:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="error_message exceeds maximum length of 15,000 characters.",
+        )
+
+    # 3. Pre-validate file path anti-traversal if specified
+    if request.file_path:
+        raw_file = request.file_path.strip()
+        if ".." in raw_file.split("/") or raw_file.startswith("/") or raw_file.startswith("\\"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid file_path: Path traversal or absolute paths are prohibited.",
+            )
+
+    repo_service = RepositoryService()
+    assistant = DebugAssistant()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return await assistant.diagnose_error(
+                repo_path=repo_path,
+                repo_info=repo_info,
+                request=request,
+            )
+
+    except DebugValidationError as exc:
+        logger.warning("Debugging request validation error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except DebugSourceNotFoundError as exc:
+        logger.warning("Target source not found for debugging: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during debugging analysis: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while analyzing the error.",
+        ) from exc
+
 
 
 
