@@ -15,6 +15,7 @@ import SecurityAnalysisDashboard from "./SecurityAnalysisDashboard";
 import TestGenerationView from "./TestGenerationView";
 import CodeReviewView from "./CodeReviewView";
 import DebugAssistantView from "./DebugAssistantView";
+import DocumentationGeneratorView from "./DocumentationGeneratorView";
 
 
 interface RepoResultsProps {
@@ -289,6 +290,12 @@ export default function RepoResults({ data, onReset }: RepoResultsProps) {
 
       {/* AI-Powered Debugging Assistant */}
       <DebugAssistantView
+        repositoryUrl={repository.url}
+        codeFiles={codeData?.files}
+      />
+
+      {/* AI-Powered Documentation Generator */}
+      <DocumentationGeneratorView
         repositoryUrl={repository.url}
         codeFiles={codeData?.files}
       />

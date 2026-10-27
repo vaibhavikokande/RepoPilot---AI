@@ -29,6 +29,13 @@ from app.debug_assistant import (
     DebugSourceNotFoundError,
     DebugValidationError,
 )
+from app.doc_generator import (
+    DocGenerateRequest,
+    DocGenerateResponse,
+    DocGenerator,
+    DocTargetNotFoundError,
+    DocValidationError,
+)
 from app.core.config import get_settings
 from app.security_analysis import (
     SecurityAnalysisRequest,
@@ -1351,6 +1358,101 @@ async def debug_error(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected internal error occurred while analyzing the error.",
         ) from exc
+
+
+@router.post(
+    "/generate-docs",
+    response_model=DocGenerateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate AI-powered repository documentation",
+    description=(
+        "Analyzes repository manifests, directory structure, routes, and code intelligence "
+        "to generate evidence-grounded technical documentation (README, architecture, API reference, etc.)."
+    ),
+)
+async def generate_documentation(
+    request: DocGenerateRequest,
+) -> DocGenerateResponse:
+    """Generate technical documentation for the requested repository and doc_type.
+
+    Args:
+        request: DocGenerateRequest with repository URL, doc_type, audience, detail_level, etc.
+
+    Returns:
+        DocGenerateResponse with generated Markdown, sections, and metadata.
+    """
+    # 1. Validate GitHub URL
+    try:
+        parsed_repo = GitHubService.validate_and_parse_url(request.repository_url)
+    except InvalidRepositoryURLError as exc:
+        logger.info("Invalid repository URL rejected for doc generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+    # 2. Pre-validate target_path anti-traversal if specified
+    if request.target_path:
+        raw_path = request.target_path.strip()
+        if ".." in raw_path.split("/") or raw_path.startswith("/") or raw_path.startswith("\\"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid target_path: Path traversal or absolute paths are prohibited.",
+            )
+
+    repo_service = RepositoryService()
+    generator = DocGenerator()
+
+    try:
+        with repo_service.cloned_repository(
+            clone_url=parsed_repo.clone_url,
+            owner=parsed_repo.owner,
+            name=parsed_repo.name,
+        ) as (repo_path, default_branch):
+            repo_info = RepositoryInfo(
+                name=parsed_repo.name,
+                owner=parsed_repo.owner,
+                url=parsed_repo.url,
+                default_branch=default_branch,
+            )
+
+            return await generator.generate_documentation(
+                repo_path=repo_path,
+                repo_info=repo_info,
+                request=request,
+            )
+
+    except DocValidationError as exc:
+        logger.warning("Doc generation validation error: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except DocTargetNotFoundError as exc:
+        logger.warning("Target path or symbol not found for doc generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryAccessError as exc:
+        logger.warning("Repository access failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except RepositoryCloningError as exc:
+        logger.error("Repository cloning failed for %s: %s", parsed_repo.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error during documentation generation: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected internal error occurred while generating documentation.",
+        ) from exc
+
 
 
 

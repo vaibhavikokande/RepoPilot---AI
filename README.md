@@ -37,7 +37,7 @@ To create an AI software engineer that can:
 
 ## ✅ Key Features
 
-### Implemented (Day 1 – Day 12)
+### Implemented (Day 1 – Day 13)
 
 - ✅ FastAPI backend with health monitoring API
 - ✅ Next.js + TypeScript frontend with landing page
@@ -83,10 +83,15 @@ To create an AI software engineer that can:
 - ✅ **Stack Trace Parsing & Source Context Locator** (Python & JS/TS trace parsing, frame resolution, AST entity context)
 - ✅ **Ranked Hypotheses & Calibrated Confidence** (proven facts vs likely causes vs hypotheses, explicit confidence disclaimer)
 - ✅ **Interactive Debugging Workspace** (trace input, reproduction steps, expected behavior, code evidence inspector, suggested fix copy, frame explorer)
+- ✅ **AI Documentation Generator Engine** (`POST /api/v1/repositories/generate-docs`, `GET /api/v1/documentation/{document_id}`)
+- ✅ **7 Documentation Archetypes** (`readme`, `project_overview`, `architecture` with valid Mermaid diagrams, `module`, `api_reference`, `function_reference`, `setup_guide`)
+- ✅ **AST & Ecosystem Context Discovery** (API route reflection `@router`/`@app`, AST symbol harvesting, package manifests, test tool detection, environment variables)
+- ✅ **Grounding & Evidence Guardrails** (secret redaction, `[Requires Confirmation]` flags for unverified claims, path traversal prevention)
+- ✅ **Interactive Documentation Workspace & Read-Only Export** (live Markdown preview vs raw editor, one-click copy, direct client-side `.md` download, audience & detail controls)
 - ✅ Conversational query normalization and software engineering synonym expansion
 - ✅ Explainable search with human-readable match insights and criteria breakdown
 - ✅ API versioning (v1) and Pydantic schemas
-- ✅ Automated test suite (217 unit and integration tests passing in ~1s)
+- ✅ Automated test suite (235 unit and integration tests passing in ~1s)
 - ✅ Project documentation & architecture document
 
 ### Planned
@@ -359,6 +364,48 @@ RepoPilot AI incorporates an evidence-grounded debugging assistant that analyzes
 5. **Read-Only Suggested Fixes & Practical Next Steps**:
    - Provides concrete code fix snippets without automatically altering repository files or running tests on target code.
    - Formulates step-by-step reproduction and verification instructions.
+
+## 📝 AI Documentation Generator Engine
+
+RepoPilot AI incorporates an evidence-grounded technical documentation generator that synthesizes repository-specific documentation across seven archetypes using source code, AST symbols, API routes, and manifest metadata:
+
+1. **Seven Documentation Archetypes**:
+   - `readme`: Comprehensive project README with overview, features, setup, and usage.
+   - `project_overview`: High-level summary of the repository's mission, problems solved, and capabilities.
+   - `architecture`: System architecture description complete with valid, grounded Mermaid diagrams (`graph TD`).
+   - `module`: In-depth breakdown of a specific directory, package, or subsystem.
+   - `api_reference`: Structured documentation of discovered HTTP REST routes and endpoints.
+   - `function_reference`: Granular documentation for specific functions, methods, or classes with signatures, parameters, and return types.
+   - `setup_guide`: Step-by-step local development prerequisites, installation, environment configuration, and test instructions.
+2. **Context Collection & Anti-Traversal Scoping (`backend/app/doc_generator/context_collector.py`)**:
+   - Inspects package manifests (`requirements.txt`, `pyproject.toml`, `package.json`, `setup.py`, `Pipfile`).
+   - Scans existing documentation files (`README.md`, `docs/`) to preserve known project conventions.
+   - Generates directory layout trees with smart exclusion of build and dependency folders.
+   - Statically discovers API routes (`@router.get`, `@app.post`, Express routes) with HTTP methods and handler names.
+   - Parses Python AST symbols (classes, methods, functions, signatures, docstrings) across targeted files.
+   - Scans environment variables and configuration files (`.env.example`, `config.py`).
+   - Discovers test runner configurations (`pytest.ini`, `setup.cfg`, `tox.ini`, `jest.config.js`).
+   - Strictly validates paths within workspace boundaries, rejecting directory traversal attempts (`..` and escaping paths).
+3. **Prompt Injection Hardening & Mermaid Specifications (`backend/app/doc_generator/prompt_builder.py`)**:
+   - Isolates untrusted repository data within `<UNTRUSTED_REPO_DATA>` XML-like blocks.
+   - Instructs the generator never to execute or treat repository code as system instructions.
+   - Provides strict formatting guidelines for Mermaid diagrams, requiring valid `graph TD` syntax and verified component names.
+   - Mandates explicit evidence grounding: all commands, routes, and classes must originate from verified codebase files.
+4. **Evidence Grounding Validator & Secret Redaction (`backend/app/doc_generator/validator.py`)**:
+   - Redacts sensitive credentials, API keys, passwords, and tokens (`[REDACTED_API_KEY]`, `[REDACTED_SECRET]`).
+   - Automatically tracks and flags unverified claims with `[Requires Confirmation]`.
+   - Parses Markdown H1 and H2 headings into structured `DocSection` lists for navigation.
+   - Extracts executive summaries from introductory sections.
+5. **Deterministic Mock & Offline Fallback (`backend/app/doc_generator/generator.py`)**:
+   - Produces high-quality, fully structured documentation for all 7 archetypes from collected context even when external LLMs are unavailable or unconfigured.
+   - Generates valid, syntax-checked Mermaid architecture diagrams reflecting discovered project directories and routes.
+6. **Thread-Safe In-Memory Document Store (`backend/app/doc_generator/store.py`)**:
+   - Stores generated documents with unique IDs (`doc_...`) for subsequent retrieval.
+7. **Read-Only Workspace Protection & Client-Side Export**:
+   - Preview documentation with syntax highlighting and raw Markdown views.
+   - One-click clipboard copy.
+   - Direct client-side `.md` file download via Blob URL.
+   - Original repository files are 100% untouched—no accidental overwrites.
 
 ## 🔌 API
 
@@ -1200,12 +1247,65 @@ Request payload:
 }
 ```
 
+### 11. AI-Powered Documentation Generator (`POST /api/v1/repositories/generate-docs`)
+
+Generate evidence-grounded technical documentation across 7 archetypes (`readme`, `project_overview`, `architecture` with Mermaid diagrams, `module`, `api_reference`, `function_reference`, `setup_guide`):
+
+```bash
+POST /api/v1/repositories/generate-docs
+```
+
+Request payload:
+```json
+{
+  "repository_url": "https://github.com/octocat/Hello-World",
+  "doc_type": "readme",
+  "audience": "developer",
+  "detail_level": "standard",
+  "custom_instructions": "Highlight project setup and REST APIs."
+}
+```
+
+**Example Response:**
+```json
+{
+  "document_id": "doc_e8c3b1a2f4",
+  "doc_type": "readme",
+  "title": "Hello-World — Documentation",
+  "content": "# Hello-World\n\n## Overview\nHello-World is an open-source project.\n\n## Architecture\n```mermaid\ngraph TD\n    A[Client] --> B[API Router]\n```\n\n## Setup\nRun `pip install -r requirements.txt`.",
+  "sections": [
+    { "title": "Overview", "level": 2, "content": "Hello-World is an open-source project." },
+    { "title": "Architecture", "level": 2, "content": "```mermaid\ngraph TD\n    A[Client] --> B[API Router]\n```" },
+    { "title": "Setup", "level": 2, "content": "Run `pip install -r requirements.txt`." }
+  ],
+  "summary": "Generated technical documentation for Hello-World repository covering overview, architecture, and setup.",
+  "metadata": {
+    "repository_url": "https://github.com/octocat/Hello-World",
+    "doc_type": "readme",
+    "audience": "developer",
+    "detail_level": "standard",
+    "generated_by": "deterministic_fallback",
+    "analyzed_files": ["README.md", "app/main.py", "requirements.txt"],
+    "discovered_routes_count": 5,
+    "discovered_symbols_count": 12,
+    "has_mermaid": true,
+    "unverified_items": []
+  },
+  "created_at": "2026-10-27T14:00:00Z"
+}
+```
+
+Retrieve generated documentation by ID:
+```bash
+GET /api/v1/documentation/{document_id}
+```
+
 **Interactive API documentation**: http://localhost:8000/docs
 
 ## 🧪 Running Tests
 
 ```bash
-# Backend tests (217 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, isolated execution & coverage, code review, and AI debugging assistant)
+# Backend tests (235 tests covering ingestion, AST parsing, chunking, embeddings, Chroma vector store, search, RAG pipeline, code quality, security analysis, test generation, isolated execution & coverage, code review, AI debugging assistant, and AI documentation generator)
 cd backend
 pytest tests/ -v
 ```
@@ -1226,9 +1326,10 @@ pytest tests/ -v
 | **Phase 10** | Safe Test Execution & Coverage Analysis — Isolated container runner, pytest reporting, coverage analysis & test dashboard | ✅ Complete |
 | **Phase 11** | AI-Powered Code Review & Recommendations — Evidence collection, prompt hardening, grounding validation, read-only improvements & review dashboard | ✅ Complete |
 | **Phase 12** | AI Debugging Assistant — Stack trace parsing, source context location, ranked root causes, debugging steps & dashboard | ✅ Complete |
-| **Phase 13** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
-| **Phase 14** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
-| **Phase 15** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
+| **Phase 13** | AI Documentation Generator — Multi-archetype documentation, Mermaid diagrams, route/symbol discovery, secret redaction & export | ✅ Complete |
+| **Phase 14** | Agentic Workflow — LangGraph, multi-agent orchestration | 🔲 Planned |
+| **Phase 15** | Bug Detection & Fixes — Automated debugging and code repair | 🔲 Planned |
+| **Phase 16** | Production Deployment — Docker, CI/CD, cloud hosting | 🔲 Planned |
 
 
 

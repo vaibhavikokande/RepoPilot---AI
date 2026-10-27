@@ -69,6 +69,9 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - Static Security Analysis Dashboard with severity badges, category pills, CWE mapping, and remediation guidance
   - Interactive Unit Test Generator UI with AST entity pickers, test descriptions, syntax verification badges, copy, and `.py` download
   - Interactive Test Execution & Coverage Dashboard with review-then-run action, test outcome metrics, statement coverage bar, uncovered lines indicators, and runner console logs
+  - Interactive Code Review Dashboard with multi-focus analysis, severity & category filtering, verified code evidence, and read-only improvement suggestions
+  - Interactive AI Debugging Workspace with stack trace parsing, error explanations, ranked causes, code context viewer, and suggested fixes
+  - Interactive AI Documentation Generator Workspace with 7 archetypes, target entity selection, audience & detail controls, formatted preview & raw Markdown views, and client-side copy and `.md` export
   - Responsive dark theme design
 - **Planned Features**:
   - Real-time streaming output
@@ -91,6 +94,10 @@ This document describes the high-level architecture of RepoPilot AI. Components 
   - `POST /api/v1/repositories/run-tests` — Safe test execution inside container sandbox with coverage analysis
   - `GET /api/v1/test-runs/{run_id}` — Test run outcome, summary, and coverage retrieval
   - `GET /api/v1/repositories/sandbox-status` — Container sandbox availability and security diagnostics
+  - `POST /api/v1/repositories/review-code` — AI-powered code review and actionable recommendations
+  - `POST /api/v1/repositories/debug` — AI debugging assistant analyzing errors and stack traces
+  - `POST /api/v1/repositories/generate-docs` — Multi-archetype technical documentation generation
+  - `GET /api/v1/documentation/{document_id}` — Generated technical documentation retrieval
 - **Architecture Patterns**:
   - Application factory (`create_app()`)
   - Versioned API routing
@@ -421,6 +428,49 @@ Future RAG Layer [Planned]
     - Actionable step-by-step debugging checklist.
     - Read-only suggested code fix preview with one-click copy button.
     - Collapsible stack frames inspector detailing application vs. vendor frames.
+
+### AI Technical Documentation Generator & Workspace [Implemented]
+
+- **Purpose**: Autonomously generate accurate, repository-grounded technical documentation across 7 archetypes (`readme`, `project_overview`, `architecture` with valid Mermaid diagrams, `module`, `api_reference`, `function_reference`, `setup_guide`), reflecting actual repository source code, AST entities, discovered API routes, package manifests, and configuration files.
+- **Tech**: Python Regular Expressions, AST Parsing, Next.js / TypeScript / Tailwind CSS, Multi-Provider LLM (`OpenAI` with `MockLLMGenerator` deterministic fallback).
+- **Architecture & Pipeline**:
+  - **Context Collector (`context_collector.py`)**:
+    - Discovers manifests (`requirements.txt`, `pyproject.toml`, `package.json`, `setup.py`, `Pipfile`) to determine real dependencies.
+    - Scans existing documentation files (`README.md`, `docs/`) to respect established project naming and layout conventions.
+    - Generates directory tree representations with automatic filtering of build/dependency noise.
+    - Discovers API routes via static analysis across Python decorators (`@router.get`, `@app.post`, etc.) and JavaScript/TypeScript Express routing.
+    - Extracts Python AST symbols (classes, functions, methods, parameter signatures, and docstrings).
+    - Detects environment variables from `.env.example` and configuration files.
+    - Identifies configured test runners (`pytest`, `jest`, `unittest`).
+    - Enforces strict path traversal defenses, rejecting any relative sequences (`..`) or paths that escape repository boundaries.
+  - **Prompt Hardening & Injection Defenses (`prompt_builder.py`)**:
+    - Wraps all untrusted codebase context inside `<UNTRUSTED_REPO_DATA>` XML-like blocks.
+    - Instructs LLMs to treat all repository data strictly as text to be documented and ignore embedded instructions.
+    - Enforces Mermaid diagram constraints: requires valid `graph TD` flowcharts referencing verified modules and components.
+    - Forbids inventing nonexistent dependencies, routes, environment variables, or CLI commands.
+  - **Grounding Validator & Secret Redaction (`validator.py`)**:
+    - Scans generated markdown for sensitive tokens, AWS keys, GitHub credentials, and passwords, replacing them with `[REDACTED_...]` placeholders.
+    - Parses Markdown H1 and H2 headers into structured, queryable `DocSection` objects for navigation.
+    - Extracts concise executive summaries.
+    - Tracks and tags unverified claims with `[Requires Confirmation]`.
+  - **Generator Orchestrator & Deterministic Fallback (`generator.py`)**:
+    - Coordinates context gathering, prompt preparation, LLM synthesis, validation, and storage.
+    - Features a full deterministic fallback engine that synthesizes complete, structured documentation for all 7 archetypes from collected context even when external LLM services are offline or unconfigured.
+    - Generates valid Mermaid architecture diagrams dynamically mapping discovered repository directories and API endpoints.
+  - **Document Store (`store.py`)**:
+    - Thread-safe in-memory store for saving and retrieving generated documents via unique IDs (`doc_...`).
+  - **Read-Only Safety & Client-Side Export**:
+    - Generated previews are completely read-only until the user explicitly chooses to copy or download.
+    - Client-side `.md` file download via Blob URL guarantees that original repository files remain completely untouched.
+  - **Interactive Next.js Documentation Workspace (`DocumentationGeneratorView.tsx`)**:
+    - Document archetype selector cards (`README`, `Overview`, `Architecture`, `Module`, `API Reference`, `Function Reference`, `Setup Guide`).
+    - Target file and symbol pickers populated from AST analysis.
+    - Target audience selector (`developer`, `beginner`, `maintainer`) and detail level selector (`concise`, `standard`, `comprehensive`).
+    - Custom developer instructions input.
+    - Summary status banner with analyzed file count, discovered route/symbol counts, and generation method.
+    - Formatted Markdown preview vs. raw source code toggle.
+    - One-click "Copy Markdown" and "Download .md" buttons.
+    - Collapsible drawer listing all analyzed repository source files.
 
 ### Agent Orchestrator [Planned]
 

@@ -1132,3 +1132,112 @@ export async function debugError(
   return response.json();
 }
 
+/** Supported documentation types */
+export type DocType =
+  | "readme"
+  | "project_overview"
+  | "architecture"
+  | "module"
+  | "api_reference"
+  | "function_reference"
+  | "setup_guide";
+
+/** Target audience for generated documentation */
+export type DocAudience = "developer" | "beginner" | "maintainer";
+
+/** Detail level for generated documentation */
+export type DocDetailLevel = "concise" | "standard" | "comprehensive";
+
+/** A structured section within a generated document */
+export interface DocSection {
+  title: string;
+  content: string;
+  subsections?: DocSection[];
+}
+
+/** Metadata regarding documentation generation execution */
+export interface DocMetadata {
+  doc_type: string;
+  audience: string;
+  detail_level: string;
+  model: string;
+  generation_time_seconds: number;
+  source_files_count: number;
+  created_at: string;
+}
+
+/** Request payload for generating repository documentation */
+export interface DocGenerateRequest {
+  repository_url: string;
+  doc_type: DocType;
+  target_path?: string | null;
+  target_symbol?: string | null;
+  audience?: DocAudience;
+  detail_level?: DocDetailLevel;
+  user_instructions?: string | null;
+}
+
+/** Response payload containing generated technical documentation */
+export interface DocGenerateResponse {
+  document_id: string;
+  repository: RepositoryInfo;
+  doc_type: DocType;
+  title: string;
+  content: string;
+  summary: string;
+  sections: DocSection[];
+  source_files_used: string[];
+  missing_information: string[];
+  unverified_items: string[];
+  metadata: DocMetadata;
+  status: string;
+  warnings: string[];
+}
+
+/**
+ * Generate AI-powered technical documentation based on repository source evidence.
+ */
+export async function generateDocumentation(
+  request: DocGenerateRequest
+): Promise<DocGenerateResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/repositories/generate-docs`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(request),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = "Failed to generate documentation.";
+    try {
+      const errorData = await response.json();
+      if (errorData && errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      errorMessage = `Server returned status ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
+  }
+
+  return response.json();
+}
+
+/**
+ * Retrieve a previously generated documentation session by document ID.
+ */
+export async function getDocument(
+  documentId: string
+): Promise<DocGenerateResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/documentation/${documentId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch document: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+

@@ -78,6 +78,15 @@ from app.schemas.debug import (
     SourceEvidence,
     StackFrame,
 )
+from app.schemas.documentation import (
+    DocAudience,
+    DocDetailLevel,
+    DocGenerateRequest,
+    DocGenerateResponse,
+    DocMetadata,
+    DocSection,
+    DocType,
+)
 
 __all__ = [
     "AnalysisStats",
@@ -95,6 +104,13 @@ __all__ = [
     "CoverageReport",
     "DebugRequest",
     "DebugResponse",
+    "DocAudience",
+    "DocDetailLevel",
+    "DocGenerateRequest",
+    "DocGenerateResponse",
+    "DocMetadata",
+    "DocSection",
+    "DocType",
     "FileCoverage",
     "FileInfo",
     "FileTreeNode",
